@@ -21,6 +21,7 @@
 #ifndef AVUTIL_TIME_H
 #define AVUTIL_TIME_H
 
+#include "mem.h"
 #include <stdint.h>
 
 /**
@@ -52,5 +53,15 @@ int av_gettime_relative_is_monotonic(void);
  * @return zero on success or (negative) error code.
  */
 int av_usleep(unsigned usec);
+
+/**
+ * Linux strftime function with micro second accuracy
+ * @param buf    char buffer to write output
+ * @param size   max number of bytes
+ * @param format format string, identical to the one for strftime
+ * @param tv     timeval struct containing current time
+ * @return number of bytes written
+ */
+size_t av_strftime_micro(char *buf, size_t size, const char *format, const struct timeval *tv);
 
 #endif /* AVUTIL_TIME_H */

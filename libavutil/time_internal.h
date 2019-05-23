@@ -20,6 +20,9 @@
 #define AVUTIL_TIME_INTERNAL_H
 
 #include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "config.h"
 
 #if !HAVE_GMTIME_R && !defined(gmtime_r)
@@ -45,5 +48,25 @@ static inline struct tm *ff_localtime_r(const time_t* clock, struct tm *result)
 }
 #define localtime_r ff_localtime_r
 #endif
+
+static inline time_t ff_timegm(struct tm *tm)
+{
+  time_t ret;
+  char *tz;
+
+  tz = getenv("TZ");
+  if (tz)
+      tz = strdup(tz);
+  setenv("TZ", "", 1);
+  tzset();
+  ret = mktime(tm);
+  if (tz) {
+      setenv("TZ", tz, 1);
+      free(tz);
+  } else
+      unsetenv("TZ");
+  tzset();
+  return ret;
+}
 
 #endif /* AVUTIL_TIME_INTERNAL_H */
