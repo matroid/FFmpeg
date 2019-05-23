@@ -27,6 +27,7 @@
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/time_internal.h"
+#include "libavutil/strftime_micro.h"
 #include "avformat.h"
 #include "avio_internal.h"
 #include "internal.h"
@@ -83,31 +84,43 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt)
     VideoMuxData *img = s->priv_data;
     AVIOContext *pb[4];
     char filename[1024];
-    AVCodecParameters *par = s->streams[pkt->stream_index]->codecpar;
+    AVStream *stream = s->streams[pkt->stream_index];
+    AVCodecParameters *par = stream->codecpar;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(par->format);
     int i;
     int nb_renames = 0;
+    int64_t ts = av_rescale_q(pkt->pts, stream->time_base, AV_TIME_BASE_Q);
 
     if (!img->is_pipe) {
         if (img->update) {
             av_strlcpy(filename, img->path, sizeof(filename));
-        } else if (img->use_strftime) {
-            time_t now0;
-            struct tm *tm, tmpbuf;
-            time(&now0);
-            tm = localtime_r(&now0, &tmpbuf);
-            if (!strftime(filename, sizeof(filename), img->path, tm)) {
+        } else if (img->use_strftime && img->frame_pts) {
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            char temp_name[sizeof(filename)];
+            if (!strftime_micro(temp_name, sizeof(temp_name), img->path, &tv)) {
                 av_log(s, AV_LOG_ERROR, "Could not get frame filename with strftime\n");
+                return AVERROR(EINVAL);                
+            }
+            if (av_get_frame_filename2(filename, sizeof(filename), temp_name, pkt->pts, AV_FRAME_FILENAME_FLAGS_MULTIPLE, ts) < 0) {
+                av_log(s, AV_LOG_ERROR, "Cannot write filename by pts of the frames.");
                 return AVERROR(EINVAL);
             }
+        } else if (img->use_strftime) {
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            if (!strftime_micro(filename, sizeof(filename), img->path, &tv)) {
+                av_log(s, AV_LOG_ERROR, "Could not get frame filename with strftime\n");
+                return AVERROR(EINVAL);                
+            }
         } else if (img->frame_pts) {
-            if (av_get_frame_filename2(filename, sizeof(filename), img->path, pkt->pts, AV_FRAME_FILENAME_FLAGS_MULTIPLE) < 0) {
+            if (av_get_frame_filename2(filename, sizeof(filename), img->path, pkt->pts, AV_FRAME_FILENAME_FLAGS_MULTIPLE, ts) < 0) {
                 av_log(s, AV_LOG_ERROR, "Cannot write filename by pts of the frames.");
                 return AVERROR(EINVAL);
             }
         } else if (av_get_frame_filename2(filename, sizeof(filename), img->path,
                                           img->img_number,
-                                          AV_FRAME_FILENAME_FLAGS_MULTIPLE) < 0 &&
+                                          AV_FRAME_FILENAME_FLAGS_MULTIPLE, ts) < 0 &&
                    img->img_number > 1) {
             av_log(s, AV_LOG_ERROR,
                    "Could not get frame filename number %d from pattern '%s' (either set update or use a pattern like %%03d within the filename pattern)\n",

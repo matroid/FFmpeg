@@ -21,6 +21,7 @@
 
 #include <stdarg.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #include "config.h"
 
@@ -4665,11 +4666,12 @@ uint64_t ff_get_formatted_ntp_time(uint64_t ntp_time_us)
     return ntp_ts;
 }
 
-int av_get_frame_filename2(char *buf, int buf_size, const char *path, int number, int flags)
+int av_get_frame_filename2(char *buf, int buf_size, const char *path, int number, int flags, int64_t ts)
 {
     const char *p;
     char *q, buf1[20], c;
     int nd, len, percentd_found;
+    int64_t hours, mins, secs, ms;
 
     q = buf;
     p = path;
@@ -4702,6 +4704,19 @@ int av_get_frame_filename2(char *buf, int buf_size, const char *path, int number
                 memcpy(q, buf1, len);
                 q += len;
                 break;
+            case 't':
+                if (!(flags & AV_FRAME_FILENAME_FLAGS_MULTIPLE) && percentd_found)
+                    goto fail;
+                percentd_found = 1;
+                if (ts < 0)
+                    goto fail;
+                snprintf(buf1, sizeof(buf1), "%016d", ts);
+                len = strlen(buf1);
+                if ((q - buf + len) > buf_size - 1)
+                    goto fail;
+                memcpy(q, buf1, len);
+                q += len;
+                break;
             default:
                 goto fail;
             }
@@ -4722,7 +4737,7 @@ fail:
 
 int av_get_frame_filename(char *buf, int buf_size, const char *path, int number)
 {
-    return av_get_frame_filename2(buf, buf_size, path, number, 0);
+    return av_get_frame_filename2(buf, buf_size, path, number, 0, 0);
 }
 
 void av_url_split(char *proto, int proto_size,
