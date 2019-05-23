@@ -41,7 +41,9 @@
 #include "libavutil/time.h"
 #include "libavutil/timecode.h"
 #include "libavutil/time_internal.h"
+#include <sys/time.h>
 #include "libavutil/timestamp.h"
+#include "libavutil/avstring.h"
 
 typedef struct SegmentListEntry {
     int index;
@@ -118,6 +120,10 @@ typedef struct SegmentContext {
     int   write_empty;
 
     int use_rename;
+    int use_pts;
+    int use_global_timestamp;
+    int64_t segment_ts;
+    double global_timestamp;
     char temp_list_filename[1024];
 
     SegmentListEntry cur_entry;
@@ -204,19 +210,23 @@ static int set_segment_filename(AVFormatContext *s)
     if (seg->segment_idx_wrap)
         seg->segment_idx %= seg->segment_idx_wrap;
     if (seg->use_strftime) {
-        time_t now0;
-        struct tm *tm, tmpbuf;
-        time(&now0);
-        tm = localtime_r(&now0, &tmpbuf);
-        if (!strftime(buf, sizeof(buf), s->url, tm)) {
-            av_log(oc, AV_LOG_ERROR, "Could not get segment filename with strftime\n");
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        if (!av_strftime_micro(buf, sizeof(buf), s->url, &tv)) {
+            av_log(s, AV_LOG_ERROR, "Could not get segment filename with strftime\n");
             return AVERROR(EINVAL);
         }
+    } else if (seg->use_pts || seg->use_global_timestamp)  {
+        av_strlcpy(buf, s->url, sizeof(buf));
     } else if (av_get_frame_filename(buf, sizeof(buf),
                                      s->url, seg->segment_idx) < 0) {
         av_log(oc, AV_LOG_ERROR, "Invalid segment filename template '%s'\n", s->url);
         return AVERROR(EINVAL);
     }
+
+    if (seg->use_pts || seg->use_global_timestamp)
+        av_strlcat(buf, ".tmp", sizeof(buf));
+
     new_name = av_strdup(buf);
     if (!new_name)
         return AVERROR(ENOMEM);
@@ -251,6 +261,8 @@ static int segment_start(AVFormatContext *s, int write_header)
     }
 
     seg->segment_idx++;
+    seg->segment_ts = -1;
+    seg->global_timestamp = -1;
     if ((seg->segment_idx_wrap) && (seg->segment_idx % seg->segment_idx_wrap == 0))
         seg->segment_idx_wrap_nb++;
 
@@ -373,6 +385,34 @@ static int segment_end(AVFormatContext *s, int write_trailer, int is_last)
     if (ret < 0)
         av_log(s, AV_LOG_ERROR, "Failure occurred when ending segment '%s'\n",
                oc->url);
+
+    if (seg->use_pts || seg->use_global_timestamp) {
+        char final_name[1024];
+        if (av_get_frame_filename3(final_name, sizeof(final_name), seg->cur_entry.filename,
+                                   0, AV_FRAME_FILENAME_FLAGS_MULTIPLE, seg->segment_ts,
+                                   seg->cur_entry.end_time - seg->cur_entry.start_time, seg->global_timestamp) < 0) {
+            av_log(s, AV_LOG_ERROR, "Cannot rename filename by pts of the frames.");
+            return AVERROR(EINVAL);
+        }
+        // remove .tmp
+        final_name[strlen(final_name) - 4] = '\0';
+
+        char *url, *src, *dst;
+        if (!(url = av_strdup(oc->url)))
+            return AVERROR(ENOMEM);
+        const char *dir = av_dirname(url);
+        if (!(src = av_append_path_component(dir, seg->cur_entry.filename)) ||
+            !(dst = av_append_path_component(dir, final_name)))
+            return AVERROR(ENOMEM);
+        if (ff_rename(src, dst, s))
+            return AVERROR(EINVAL);
+
+        av_free(url); av_free(src); av_free(dst);
+        size_t len = strlen(final_name) + 1;
+        if ((ret = av_reallocp(&seg->cur_entry.filename, len)) < 0)
+            return ret;
+        av_strlcpy(seg->cur_entry.filename, final_name, len);
+    }
 
     if (seg->list) {
         if (seg->list_size || seg->list_type == LIST_TYPE_M3U8) {
@@ -685,6 +725,8 @@ static int seg_init(AVFormatContext *s)
     int i;
 
     seg->segment_count = 0;
+    seg->segment_ts = -1;
+    seg->global_timestamp = -1;
     if (!seg->write_header_trailer)
         seg->individual_header_trailer = 0;
 
@@ -872,6 +914,18 @@ static int seg_write_packet(AVFormatContext *s, AVPacket *pkt)
     }
 
 calc_times:
+    if (pkt->stream_index == seg->reference_stream_index) {
+        if (seg->use_pts) {
+            if (pkt->pts != AV_NOPTS_VALUE && (seg->segment_ts < 0 ||
+                av_compare_ts(pkt->pts, st->time_base, seg->segment_ts, AV_TIME_BASE_Q) < 0)) {
+                seg->segment_ts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
+            }
+        }
+        if (seg->use_global_timestamp && seg->global_timestamp < 0 && pkt->gts > 0) {
+            seg->global_timestamp = pkt->gts;
+        }
+    }
+
     if (seg->times) {
         end_pts = seg->segment_count < seg->nb_times ?
             seg->times[seg->segment_count] : INT64_MAX;
@@ -902,28 +956,35 @@ calc_times:
     if (pkt->stream_index == seg->reference_stream_index &&
         (pkt->flags & AV_PKT_FLAG_KEY || seg->break_non_keyframes) &&
         (seg->segment_frame_count > 0 || seg->write_empty) &&
-        (seg->cut_pending || seg->frame_count >= start_frame ||
-         (pkt->pts != AV_NOPTS_VALUE &&
-          av_compare_ts(pkt->pts, st->time_base,
-                        end_pts - seg->time_delta, AV_TIME_BASE_Q) >= 0))) {
-        /* sanitize end time in case last packet didn't have a defined duration */
-        if (seg->cur_entry.last_duration == 0)
-            seg->cur_entry.end_time = (double)pkt->pts * av_q2d(st->time_base);
+        (pkt->pts != AV_NOPTS_VALUE || pkt->dts != AV_NOPTS_VALUE)) {
 
-        if ((ret = segment_end(s, seg->individual_header_trailer, 0)) < 0)
-            goto fail;
+        if (pkt->pts == AV_NOPTS_VALUE) {
+            av_log(s, AV_LOG_WARNING, "dangerously set keyframe NOPTS pts to dts %" PRId64 "\n", pkt->dts);
+            pkt->pts = pkt->dts;
+        }
 
-        if ((ret = segment_start(s, seg->individual_header_trailer)) < 0)
-            goto fail;
+        if (seg->cut_pending || seg->frame_count >= start_frame ||
+                av_compare_ts(pkt->pts, st->time_base,
+                              end_pts - seg->time_delta, AV_TIME_BASE_Q) >= 0) {
+            /* sanitize end time in case last packet didn't have a defined duration */
+            if (!seg->cur_entry.last_duration)
+                seg->cur_entry.end_time = (double)pkt->pts * av_q2d(st->time_base);
 
-        seg->cut_pending = 0;
-        seg->cur_entry.index = seg->segment_idx + seg->segment_idx_wrap * seg->segment_idx_wrap_nb;
-        seg->cur_entry.start_time = (double)pkt->pts * av_q2d(st->time_base);
-        seg->cur_entry.start_pts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
-        seg->cur_entry.end_time = seg->cur_entry.start_time;
+            if ((ret = segment_end(s, seg->individual_header_trailer, 0)) < 0)
+                goto fail;
 
-        if (seg->times || (!seg->frames && !seg->use_clocktime) && seg->write_empty)
-            goto calc_times;
+            if ((ret = segment_start(s, seg->individual_header_trailer)) < 0)
+                goto fail;
+
+            seg->cut_pending = 0;
+            seg->cur_entry.index = seg->segment_idx + seg->segment_idx_wrap * seg->segment_idx_wrap_nb;
+            seg->cur_entry.start_time = (double)pkt->pts * av_q2d(st->time_base);
+            seg->cur_entry.start_pts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
+            seg->cur_entry.end_time = seg->cur_entry.start_time;
+
+            if (seg->times || (!seg->frames && !seg->use_clocktime) && seg->write_empty)
+                goto calc_times;
+        }
     }
 
     if (pkt->stream_index == seg->reference_stream_index) {
@@ -1045,6 +1106,8 @@ static const AVOption options[] = {
     { "strftime",          "set filename expansion with strftime at segment creation", OFFSET(use_strftime), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
     { "increment_tc", "increment timecode between each segment", OFFSET(increment_tc), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
     { "break_non_keyframes", "allow breaking segments on non-keyframes", OFFSET(break_non_keyframes), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, E },
+    { "frame_pts", "use current frame pts for filename", OFFSET(use_pts), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, E },
+    { "global_timestamp", "use global timestamp for filename", OFFSET(use_global_timestamp), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, E},
 
     { "individual_header_trailer", "write header/trailer to each segment", OFFSET(individual_header_trailer), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, E },
     { "write_header_trailer", "write a header to the first segment and a trailer to the last one", OFFSET(write_header_trailer), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, E },

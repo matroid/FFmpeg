@@ -27,7 +27,9 @@
 #include "libavutil/log.h"
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
+#include "libavutil/time.h"
 #include "libavutil/time_internal.h"
+#include <sys/time.h>
 #include "avformat.h"
 #include "avio_internal.h"
 #include "internal.h"
@@ -42,6 +44,7 @@ typedef struct VideoMuxData {
     char target[4][1024];
     int update;
     int use_strftime;
+    int use_global_timestamp;
     int frame_pts;
     const char *muxer;
     int use_rename;
@@ -130,31 +133,54 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt)
     VideoMuxData *img = s->priv_data;
     AVIOContext *pb[4] = {0};
     char filename[1024];
-    AVCodecParameters *par = s->streams[pkt->stream_index]->codecpar;
+    AVStream *stream = s->streams[pkt->stream_index];
+    AVCodecParameters *par = stream->codecpar;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(par->format);
     int ret, i;
     int nb_renames = 0;
+    int64_t ts = av_rescale_q(pkt->pts, stream->time_base, AV_TIME_BASE_Q);
     AVDictionary *options = NULL;
 
     if (img->update) {
         av_strlcpy(filename, img->path, sizeof(filename));
-    } else if (img->use_strftime) {
-        time_t now0;
-        struct tm *tm, tmpbuf;
-        time(&now0);
-        tm = localtime_r(&now0, &tmpbuf);
-        if (!strftime(filename, sizeof(filename), img->path, tm)) {
-            av_log(s, AV_LOG_ERROR, "Could not get frame filename with strftime\n");
-            return AVERROR(EINVAL);
+    } else if (img->use_strftime || img->frame_pts || img->use_global_timestamp) {
+        char temp_name[sizeof(filename)];
+        if (img->use_strftime) {
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            if (!av_strftime_micro(temp_name, sizeof(temp_name), img->path, &tv)) {
+                av_log(s, AV_LOG_ERROR, "Could not get frame filename with strftime\n");
+                return AVERROR(EINVAL);
+            }
+        } else {
+            av_strlcpy(temp_name, img->path, sizeof(temp_name));
         }
+
+        if (img->frame_pts || img->use_global_timestamp) {
+            double global_timestamp = pkt->gts;
+            if (av_get_frame_filename3(filename, sizeof(filename), temp_name, pkt->pts, AV_FRAME_FILENAME_FLAGS_MULTIPLE, ts, 0, global_timestamp) < 0) {
+                av_log(s, AV_LOG_ERROR, "Cannot write filename by pts of the frames.");
+                return AVERROR(EINVAL);
+            }
+        } else {
+            av_strlcpy(filename, temp_name, sizeof(filename));
+        }
+    } else if (av_get_frame_filename2(filename, sizeof(filename), img->path,
+                                        img->img_number,
+                                        AV_FRAME_FILENAME_FLAGS_MULTIPLE, ts) < 0 &&
+                img->img_number > 1) {
+        av_log(s, AV_LOG_ERROR,
+                "Could not get frame filename number %d from pattern '%s' (either set update or use a pattern like %%03d within the filename pattern)\n",
+                img->img_number, img->path);
+        return AVERROR(EINVAL);
     } else if (img->frame_pts) {
-        if (av_get_frame_filename2(filename, sizeof(filename), img->path, pkt->pts, AV_FRAME_FILENAME_FLAGS_MULTIPLE) < 0) {
+        if (av_get_frame_filename2(filename, sizeof(filename), img->path, pkt->pts, AV_FRAME_FILENAME_FLAGS_MULTIPLE, ts) < 0) {
             av_log(s, AV_LOG_ERROR, "Cannot write filename by pts of the frames.");
             return AVERROR(EINVAL);
         }
     } else if (av_get_frame_filename2(filename, sizeof(filename), img->path,
                                       img->img_number,
-                                      AV_FRAME_FILENAME_FLAGS_MULTIPLE) < 0 &&
+                                      AV_FRAME_FILENAME_FLAGS_MULTIPLE, ts) < 0 &&
                img->img_number > 1) {
         av_log(s, AV_LOG_ERROR,
                "Could not get frame filename number %d from pattern '%s'. "
@@ -244,6 +270,7 @@ static const AVOption muxoptions[] = {
     { "start_number", "set first number in the sequence", OFFSET(img_number), AV_OPT_TYPE_INT,  { .i64 = 1 }, 0, INT_MAX, ENC },
     { "strftime",     "use strftime for filename", OFFSET(use_strftime),  AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, ENC },
     { "frame_pts",    "use current frame pts for filename", OFFSET(frame_pts),  AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, ENC },
+    { "global_timestamp", "use global timestamp for filename", OFFSET(use_global_timestamp),  AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, ENC },
     { "atomic_writing", "write files atomically (using temporary files and renames)", OFFSET(use_rename), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, ENC },
     { "protocol_opts", "specify protocol options for the opened files", OFFSET(protocol_opts), AV_OPT_TYPE_DICT, {0}, 0, 0, ENC },
     { NULL },

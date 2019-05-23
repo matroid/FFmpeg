@@ -1265,9 +1265,11 @@ static int parse_playlist(AVFormatContext *s, const char *url, VariantStream *vs
             }
         } else if (av_strstart(line, "#EXT-X-PROGRAM-DATE-TIME:", &ptr)) {
             struct tm program_date_time;
-            int y,M,d,h,m,s;
-            double ms;
-            if (sscanf(ptr, "%d-%d-%dT%d:%d:%d.%lf", &y, &M, &d, &h, &m, &s, &ms) != 7) {
+            int y,M,d,h,m;
+            double s;
+
+            // TODO: take timezone into consideration
+            if (sscanf(ptr, "%d-%d-%dT%d:%d:%lf", &y, &M, &d, &h, &m, &s) != 6) {
                 ret = AVERROR_INVALIDDATA;
                 goto fail;
             }
@@ -1277,11 +1279,12 @@ static int parse_playlist(AVFormatContext *s, const char *url, VariantStream *vs
             program_date_time.tm_mday = d;
             program_date_time.tm_hour = h;
             program_date_time.tm_min = m;
-            program_date_time.tm_sec = s;
+            program_date_time.tm_sec = 0;
             program_date_time.tm_isdst = -1;
 
-            discont_program_date_time = mktime(&program_date_time);
-            discont_program_date_time += (double)(ms / 1000);
+            discont_program_date_time = ff_timegm(&program_date_time);
+            discont_program_date_time += s;
+            // TODO: avoid rounding errors by tracking ms separately
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {

@@ -126,6 +126,7 @@ static int encode_simple_internal(AVCodecContext *avctx, AVPacket *avpkt)
     AVFrame          *frame = es->in_frame;
     int got_packet;
     int ret;
+    double gts = -1;
 
     if (avci->draining_done)
         return AVERROR_EOF;
@@ -136,6 +137,10 @@ static int encode_simple_internal(AVCodecContext *avctx, AVPacket *avpkt)
         if (ret < 0 && ret != AVERROR_EOF)
             return ret;
     }
+
+    // record frame global timestamp
+    if (frame)
+        gts = frame->gts;
 
     if (!frame->buf[0]) {
         if (!(avctx->codec->capabilities & AV_CODEC_CAP_DELAY ||
@@ -163,6 +168,10 @@ static int encode_simple_internal(AVCodecContext *avctx, AVPacket *avpkt)
             !(avctx->codec->capabilities & AV_CODEC_CAP_DELAY))
             avpkt->pts = avpkt->dts = frame->pts;
     }
+
+    // assign global timestamp if available
+    if (gts > 0 && avpkt->gts <= 0)
+        avpkt->gts = gts;
 
     av_assert0(ret <= 0);
 

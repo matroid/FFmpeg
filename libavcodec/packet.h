@@ -391,6 +391,8 @@ typedef struct AVPacket {
     attribute_deprecated
     int64_t convergence_duration;
 #endif
+
+    double gts;
 } AVPacket;
 
 typedef struct AVPacketList {
