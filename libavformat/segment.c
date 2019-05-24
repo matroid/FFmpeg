@@ -42,6 +42,7 @@
 #include "libavutil/timecode.h"
 #include "libavutil/time_internal.h"
 #include "libavutil/timestamp.h"
+#include "libavutil/strftime_micro.h"
 
 typedef struct SegmentListEntry {
     int index;
@@ -119,6 +120,8 @@ typedef struct SegmentContext {
     int   write_empty;
 
     int use_rename;
+    int use_pts;
+    int64_t segment_ts;
     char temp_list_filename[1024];
 
     SegmentListEntry cur_entry;
@@ -198,19 +201,23 @@ static int set_segment_filename(AVFormatContext *s)
     if (seg->segment_idx_wrap)
         seg->segment_idx %= seg->segment_idx_wrap;
     if (seg->use_strftime) {
-        time_t now0;
-        struct tm *tm, tmpbuf;
-        time(&now0);
-        tm = localtime_r(&now0, &tmpbuf);
-        if (!strftime(buf, sizeof(buf), s->url, tm)) {
-            av_log(oc, AV_LOG_ERROR, "Could not get segment filename with strftime\n");
-            return AVERROR(EINVAL);
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        if (!strftime_micro(buf, sizeof(buf), s->url, &tv)) {
+            av_log(s, AV_LOG_ERROR, "Could not get segment filename with strftime\n");
+            return AVERROR(EINVAL);                
         }
+    } else if (seg->use_pts)  {
+        strcpy(buf, s->url);
     } else if (av_get_frame_filename(buf, sizeof(buf),
                                      s->url, seg->segment_idx) < 0) {
         av_log(oc, AV_LOG_ERROR, "Invalid segment filename template '%s'\n", s->url);
         return AVERROR(EINVAL);
     }
+
+    if (seg->use_pts)
+        strcat(buf, ".tmp");
+
     new_name = av_strdup(buf);
     if (!new_name)
         return AVERROR(ENOMEM);
@@ -245,6 +252,7 @@ static int segment_start(AVFormatContext *s, int write_header)
     }
 
     seg->segment_idx++;
+    seg->segment_ts = -1;
     if ((seg->segment_idx_wrap) && (seg->segment_idx % seg->segment_idx_wrap == 0))
         seg->segment_idx_wrap_nb++;
 
@@ -367,6 +375,28 @@ static int segment_end(AVFormatContext *s, int write_trailer, int is_last)
     if (ret < 0)
         av_log(s, AV_LOG_ERROR, "Failure occurred when ending segment '%s'\n",
                oc->url);
+
+    if (seg->use_pts) {
+        char final_name[1024];
+        if (av_get_frame_filename2(final_name, sizeof(final_name), seg->cur_entry.filename, 0, 0, seg->segment_ts) < 0) {
+            av_log(s, AV_LOG_ERROR, "Cannot rename filename by pts of the frames.");
+            return AVERROR(EINVAL);
+        }
+        final_name[strlen(final_name) - 4] = '\0';  // remove .tmp
+
+        char *dirname, *src, *dst;
+        if ((dirname = av_strdup(oc->url)) == NULL)
+            return AVERROR(ENOMEM);
+        av_dirname(dirname);
+        if ((src = av_append_path_component(dirname, seg->cur_entry.filename)) == NULL ||
+            (dst = av_append_path_component(dirname, final_name)) == NULL)
+            return AVERROR(ENOMEM);
+        if (ff_rename(src, dst, s) != 0)
+            return AVERROR(EINVAL);
+
+        av_free(dirname); av_free(src); av_free(dst);
+        strcpy(seg->cur_entry.filename, final_name);
+    }
 
     if (seg->list) {
         if (seg->list_size || seg->list_type == LIST_TYPE_M3U8) {
@@ -652,6 +682,7 @@ static int seg_init(AVFormatContext *s)
     int i;
 
     seg->segment_count = 0;
+    seg->segment_ts = -1;
     if (!seg->write_header_trailer)
         seg->individual_header_trailer = 0;
 
@@ -860,6 +891,10 @@ static int seg_write_packet(AVFormatContext *s, AVPacket *pkt)
         return AVERROR(EINVAL);
 
 calc_times:
+    if (seg->use_pts && seg->segment_ts < 0) {
+        seg->segment_ts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
+    }
+
     if (seg->times) {
         end_pts = seg->segment_count < seg->nb_times ?
             seg->times[seg->segment_count] : INT64_MAX;
@@ -1055,6 +1090,7 @@ static const AVOption options[] = {
     { "strftime",          "set filename expansion with strftime at segment creation", OFFSET(use_strftime), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
     { "increment_tc", "increment timecode between each segment", OFFSET(increment_tc), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
     { "break_non_keyframes", "allow breaking segments on non-keyframes", OFFSET(break_non_keyframes), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, E },
+    { "frame_pts", "use current frame pts for filename", OFFSET(use_pts), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, E },
 
     { "individual_header_trailer", "write header/trailer to each segment", OFFSET(individual_header_trailer), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, E },
     { "write_header_trailer", "write a header to the first segment and a trailer to the last one", OFFSET(write_header_trailer), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, E },
