@@ -31,3 +31,35 @@ Use both clock time and frame pts, both accurate to micro second level (some spe
 ```
 ffmpeg -i something -f image2 -frame_pts 1 -strftime 1 'frame-%%%%t-%s.%%06u.png'
 ```
+
+## Segment Output
+
+Use integer as filename (already supported in regular FFmpeg):
+
+```
+ffmpeg -i something -f segment 'clip-%d.mp4'
+```
+
+Use integer as filename, but count starting from some other number:
+
+```
+ffmpeg -i something -f segment -segment_start_number 13 'clip-%d.mp4'
+```
+
+Use clock time as filename, accurate to micro second level:
+
+```
+ffmpeg -i something -f segment -strftime 1 'clip-%s.%%06u.mp4'
+```
+
+Use frame pts (presentation timestamp), accurate to micro second level:
+
+```
+ffmpeg -i something -f segment -frame_pts 1 'clip-%t.mp4'
+```
+
+Use both clock time and frame pts, both accurate to micro second level (some special escape is needed):
+
+```
+ffmpeg -i something -f segment -frame_pts 1 -strftime 1 'clip-%%%%t-%s.%%06u.mp4'
+```
