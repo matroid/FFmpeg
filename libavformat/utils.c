@@ -4669,9 +4669,8 @@ uint64_t ff_get_formatted_ntp_time(uint64_t ntp_time_us)
 int av_get_frame_filename2(char *buf, int buf_size, const char *path, int number, int flags, int64_t ts)
 {
     const char *p;
-    char *q, buf1[20], c;
+    char *q, buf1[32], c;
     int nd, len, percentd_found;
-    int64_t hours, mins, secs, ms;
 
     q = buf;
     p = path;
@@ -4710,7 +4709,7 @@ int av_get_frame_filename2(char *buf, int buf_size, const char *path, int number
                 percentd_found = 1;
                 if (ts < 0)
                     goto fail;
-                snprintf(buf1, sizeof(buf1), "%016d", ts);
+                snprintf(buf1, sizeof(buf1), "%020" PRId64, ts);
                 len = strlen(buf1);
                 if ((q - buf + len) > buf_size - 1)
                     goto fail;

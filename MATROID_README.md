@@ -63,3 +63,10 @@ Use both clock time and frame pts, both accurate to micro second level (some spe
 ```
 ffmpeg -i something -f segment -frame_pts 1 -strftime 1 'clip-%%%%t-%s.%%06u.mp4'
 ```
+
+## Credits
+
+- https://github.com/InSoundz/ffmpeg-strftime-milliseconds
+- https://trac.ffmpeg.org/ticket/1452
+- https://trac.ffmpeg.org/attachment/ticket/1452/0001-Added-the-option-to-extract-images-with-timecode-as-.patch
+- https://stackoverflow.com/questions/29527882/ffmpeg-copyts-to-preserve-timestamp

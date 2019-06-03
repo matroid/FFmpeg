@@ -395,6 +395,8 @@ static int segment_end(AVFormatContext *s, int write_trailer, int is_last)
             return AVERROR(EINVAL);
 
         av_free(dirname); av_free(src); av_free(dst);
+        if ((ret = av_reallocp(&seg->cur_entry.filename, strlen(final_name) + 1)) < 0)
+            return ret;
         strcpy(seg->cur_entry.filename, final_name);
     }
 
@@ -892,6 +894,10 @@ static int seg_write_packet(AVFormatContext *s, AVPacket *pkt)
 
 calc_times:
     if (seg->use_pts && seg->segment_ts < 0) {
+        if (pkt->pts == AV_NOPTS_VALUE) {
+            av_log(s, AV_LOG_ERROR, "input does not contain pts information");
+            return AVERROR(EINVAL);
+        }
         seg->segment_ts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
     }
 
