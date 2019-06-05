@@ -378,7 +378,9 @@ static int segment_end(AVFormatContext *s, int write_trailer, int is_last)
 
     if (seg->use_pts) {
         char final_name[1024];
-        if (av_get_frame_filename2(final_name, sizeof(final_name), seg->cur_entry.filename, 0, 0, seg->segment_ts) < 0) {
+        if (av_get_frame_filename3(final_name, sizeof(final_name), seg->cur_entry.filename,
+                                   0, AV_FRAME_FILENAME_FLAGS_MULTIPLE, seg->segment_ts,
+                                   seg->cur_entry.end_time - seg->cur_entry.start_time) < 0) {
             av_log(s, AV_LOG_ERROR, "Cannot rename filename by pts of the frames.");
             return AVERROR(EINVAL);
         }

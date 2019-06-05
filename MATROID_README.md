@@ -58,10 +58,16 @@ Use frame pts (presentation timestamp), accurate to micro second level:
 ffmpeg -i something -f segment -frame_pts 1 'clip-%t.mp4'
 ```
 
+Duration can also be included when `frame_pts` is enabled:
+
+```
+ffmpeg -i something -f segment -frame_pts 1 'clip-%t-%l.mp4'
+```
+
 Use both clock time and frame pts, both accurate to micro second level (some special escape is needed):
 
 ```
-ffmpeg -i something -f segment -frame_pts 1 -strftime 1 'clip-%%%%t-%s.%%06u.mp4'
+ffmpeg -i something -f segment -frame_pts 1 -strftime 1 'clip-%s.%%06u-%%%%t-%%%%l.mp4'
 ```
 
 ## Credits
