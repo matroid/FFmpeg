@@ -386,17 +386,17 @@ static int segment_end(AVFormatContext *s, int write_trailer, int is_last)
         }
         final_name[strlen(final_name) - 4] = '\0';  // remove .tmp
 
-        char *dirname, *src, *dst;
-        if ((dirname = av_strdup(oc->url)) == NULL)
+        char *dir, *url, *src, *dst;
+        if ((url = av_strdup(oc->url)) == NULL)
             return AVERROR(ENOMEM);
-        av_dirname(dirname);
-        if ((src = av_append_path_component(dirname, seg->cur_entry.filename)) == NULL ||
-            (dst = av_append_path_component(dirname, final_name)) == NULL)
+        dir = av_dirname(url);
+        if ((src = av_append_path_component(dir, seg->cur_entry.filename)) == NULL ||
+            (dst = av_append_path_component(dir, final_name)) == NULL)
             return AVERROR(ENOMEM);
         if (ff_rename(src, dst, s) != 0)
             return AVERROR(EINVAL);
 
-        av_free(dirname); av_free(src); av_free(dst);
+        av_free(url); av_free(src); av_free(dst);
         if ((ret = av_reallocp(&seg->cur_entry.filename, strlen(final_name) + 1)) < 0)
             return ret;
         strcpy(seg->cur_entry.filename, final_name);
