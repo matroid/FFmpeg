@@ -895,13 +895,10 @@ static int seg_write_packet(AVFormatContext *s, AVPacket *pkt)
         return AVERROR(EINVAL);
 
 calc_times:
-    if (seg->use_pts && seg->segment_ts < 0) {
-        if (pkt->pts == AV_NOPTS_VALUE) {
-            av_log(s, AV_LOG_ERROR, "input does not contain pts information");
-            return AVERROR(EINVAL);
-        }
-        seg->segment_ts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
-    }
+    if (seg->use_pts && pkt->stream_index == seg->reference_stream_index)
+        if (pkt->pts != AV_NOPTS_VALUE && (seg->segment_ts < 0 ||
+                av_compare_ts(pkt->pts, st->time_base, seg->segment_ts, AV_TIME_BASE_Q) < 0))
+            seg->segment_ts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
 
     if (seg->times) {
         end_pts = seg->segment_count < seg->nb_times ?
@@ -933,28 +930,35 @@ calc_times:
     if (pkt->stream_index == seg->reference_stream_index &&
         (pkt->flags & AV_PKT_FLAG_KEY || seg->break_non_keyframes) &&
         (seg->segment_frame_count > 0 || seg->write_empty) &&
-        (seg->cut_pending || seg->frame_count >= start_frame ||
-         (pkt->pts != AV_NOPTS_VALUE &&
-          av_compare_ts(pkt->pts, st->time_base,
-                        end_pts - seg->time_delta, AV_TIME_BASE_Q) >= 0))) {
-        /* sanitize end time in case last packet didn't have a defined duration */
-        if (seg->cur_entry.last_duration == 0)
-            seg->cur_entry.end_time = (double)pkt->pts * av_q2d(st->time_base);
+        (pkt->pts != AV_NOPTS_VALUE || pkt->dts != AV_NOPTS_VALUE)) {
+        
+        if (pkt->pts == AV_NOPTS_VALUE) {
+            av_log(s, AV_LOG_WARNING, "dangerously set keyframe NOPTS pts to dts %" PRId64 "\n", pkt->dts);
+            pkt->pts = pkt->dts;
+        }
 
-        if ((ret = segment_end(s, seg->individual_header_trailer, 0)) < 0)
-            goto fail;
+        if (seg->cut_pending || seg->frame_count >= start_frame ||
+                av_compare_ts(pkt->pts, st->time_base,
+                              end_pts - seg->time_delta, AV_TIME_BASE_Q) >= 0) {
+            /* sanitize end time in case last packet didn't have a defined duration */
+            if (seg->cur_entry.last_duration == 0)
+                seg->cur_entry.end_time = (double)pkt->pts * av_q2d(st->time_base);
 
-        if ((ret = segment_start(s, seg->individual_header_trailer)) < 0)
-            goto fail;
+            if ((ret = segment_end(s, seg->individual_header_trailer, 0)) < 0)
+                goto fail;
 
-        seg->cut_pending = 0;
-        seg->cur_entry.index = seg->segment_idx + seg->segment_idx_wrap * seg->segment_idx_wrap_nb;
-        seg->cur_entry.start_time = (double)pkt->pts * av_q2d(st->time_base);
-        seg->cur_entry.start_pts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
-        seg->cur_entry.end_time = seg->cur_entry.start_time;
+            if ((ret = segment_start(s, seg->individual_header_trailer)) < 0)
+                goto fail;
 
-        if (seg->times || (!seg->frames && !seg->use_clocktime) && seg->write_empty)
-            goto calc_times;
+            seg->cut_pending = 0;
+            seg->cur_entry.index = seg->segment_idx + seg->segment_idx_wrap * seg->segment_idx_wrap_nb;
+            seg->cur_entry.start_time = (double)pkt->pts * av_q2d(st->time_base);
+            seg->cur_entry.start_pts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
+            seg->cur_entry.end_time = seg->cur_entry.start_time;
+
+            if (seg->times || (!seg->frames && !seg->use_clocktime) && seg->write_empty)
+                goto calc_times;
+        }
     }
 
     if (pkt->stream_index == seg->reference_stream_index) {
