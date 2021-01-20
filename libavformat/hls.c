@@ -75,6 +75,7 @@ struct segment {
     uint8_t iv[16];
     /* associated Media Initialization Section, treated as a segment */
     struct segment *init_section;
+    double discont_program_date_time;
 };
 
 struct rendition;
@@ -706,6 +707,7 @@ static int parse_playlist(HLSContext *c, const char *url,
     struct segment **prev_segments = NULL;
     int prev_n_segments = 0;
     int prev_start_seq_no = -1;
+    double discont_program_date_time = -1;
 
     if (is_http && !in && c->http_persistent && c->playlist_pb) {
         in = c->playlist_pb;
@@ -843,6 +845,25 @@ static int parse_playlist(HLSContext *c, const char *url,
             ptr = strchr(ptr, '@');
             if (ptr)
                 seg_offset = strtoll(ptr+1, NULL, 10);
+        } else if (av_strstart(line, "#EXT-X-PROGRAM-DATE-TIME:", &ptr)) {
+            struct tm program_date_time;
+            int y,M,d,h,m,s;
+            double ms;
+            if (sscanf(ptr, "%d-%d-%dT%d:%d:%d.%lf", &y, &M, &d, &h, &m, &s, &ms) != 7) {
+                ret = AVERROR_INVALIDDATA;
+                goto fail;
+            }
+
+            program_date_time.tm_year = y - 1900;
+            program_date_time.tm_mon = M - 1;
+            program_date_time.tm_mday = d;
+            program_date_time.tm_hour = h;
+            program_date_time.tm_min = m;
+            program_date_time.tm_sec = s;
+            program_date_time.tm_isdst = -1;
+
+            discont_program_date_time = mktime(&program_date_time);
+            discont_program_date_time += (double)(ms / 1000);
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {
@@ -898,6 +919,11 @@ static int parse_playlist(HLSContext *c, const char *url,
                     goto fail;
                 }
 
+                seg->discont_program_date_time = discont_program_date_time;
+                if (discont_program_date_time > 0) {
+                    discont_program_date_time += duration;
+                }
+                
                 dynarray_add(&pls->segments, &pls->n_segments, seg);
                 is_segment = 0;
 
