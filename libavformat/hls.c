@@ -1805,6 +1805,8 @@ static int hls_close(AVFormatContext *s)
 
 static int hls_read_header(AVFormatContext *s)
 {
+    av_log(NULL, AV_LOG_WARNING, "MATROID DEBUG: hls_read_header\n");
+
     HLSContext *c = s->priv_data;
     int ret = 0, i;
     int highest_cur_seq_no = 0;
