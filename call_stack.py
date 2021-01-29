@@ -24,9 +24,19 @@ av_read_frame(AVFormatContext.HLSContext.PlayList.AVFormatContext)
   # so we need to figure out what that one is calling and where segment comes in
   # initialized in hls_read_header, called by AVInputFormat.read_header
   # ffio_init_context hints that AVFormatContext.AVIOContext.read_packet is (hls_)read_data
+  # using opaque pointer, read_data manages different segments
   # av_probe_input_buffer likely sets in_fmt (which is likely another HLS)
   # avformat_open_input likely sets pls.ctx as in_fmt
-
+mpegts_read_packet(AVFormatContext)
+  # ultimately we have mpegts AVFormatContext calling HLSAVIOContext.read_packet
+(hls_)read_data(HLSPlayList)
+  # this is where segment swapping occurs
+read_from_url(HLSPlayList, HLSSegment, Buffer)
+  open_input(HLSContext, HLSPlayList, Segment, AVIOContext)
+  open_url(AVFormatContext, AVIOContext, ...)
+  AVFormatContext.io_open # defines HLSPlayList.input
+  io_open_default
+avio_read(AVIOContext HLSPlayList.input)
 
 # 6. read one frame
 AVFrame = avcodec_decode_video2(AVCodecContext, AVPacket)

@@ -16,7 +16,7 @@
 #include "libavutil/imgutils.h"
 
 #define ASSERT(cond, ...) do { \
-    if (!(cond)) { \
+	if (!(cond)) { \
 		printf(__VA_ARGS__); \
 		return -1; \
 	} \
@@ -30,9 +30,9 @@ int main(int argc, char* argv[])
 	);
 	char *filepath = argv[1];
 
-    printf("#########################\n");
-    printf("##### MATROID BEGIN #####\n");
-    printf("#########################\n");
+	printf("#########################\n");
+	printf("##### MATROID BEGIN #####\n");
+	printf("#########################\n");
 
 	AVFormatContext	*pFormatCtx;
 	int				i, videoindex;
@@ -72,7 +72,7 @@ int main(int argc, char* argv[])
  
 	pStream   = pFormatCtx->streams[videoindex];
 	pCodecCtx = pStream->codec;
-	pCodec    = avcodec_find_decoder(pCodecCtx->codec_id);
+	pCodec	= avcodec_find_decoder(pCodecCtx->codec_id);
 	ASSERT(
 		pCodec != NULL,
 		"Codec not found.\n"
@@ -82,7 +82,7 @@ int main(int argc, char* argv[])
 		"Could not open codec.\n"
 	);
 	
-	pFrame     = av_frame_alloc();
+	pFrame	 = av_frame_alloc();
 	pFrameYUV  = av_frame_alloc();
 	out_buffer = (unsigned char *) av_malloc(
 		av_image_get_buffer_size(AV_PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height, 1)
@@ -109,8 +109,9 @@ int main(int argc, char* argv[])
 				sws_scale(img_convert_ctx, (const unsigned char* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, 
 					pFrameYUV->data, pFrameYUV->linesize);
 				printf(
-					"Frame pkt.pts=%f frame.pts=%f\n",
+					"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f\n",
 					packet->pts * av_q2d(pStream->time_base),
+					packet->dts * av_q2d(pStream->time_base),
 					pFrame->pts * av_q2d(pStream->time_base)		
 				);
 			}
@@ -122,8 +123,9 @@ int main(int argc, char* argv[])
 		sws_scale(img_convert_ctx, (const unsigned char* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, 
 			pFrameYUV->data, pFrameYUV->linesize);
 		printf(
-			"Frame pkt.pts=%f frame.pts=%f\n",
+			"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f\n",
 			packet->pts * av_q2d(pStream->time_base),
+			packet->dts * av_q2d(pStream->time_base),
 			pFrame->pts * av_q2d(pStream->time_base)		
 		);
 	}

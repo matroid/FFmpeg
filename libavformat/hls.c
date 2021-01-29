@@ -2096,6 +2096,7 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
     recheck_discard_flags(s, c->first_packet);
     c->first_packet = 0;
 
+    av_log(s, AV_LOG_WARNING, "MATROID DEBUG: hls read packet\n");
     for (i = 0; i < c->n_playlists; i++) {
         struct playlist *pls = c->playlists[i];
         /* Make sure we've got one buffered packet from each open playlist
@@ -2105,6 +2106,7 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
                 int64_t ts_diff;
                 AVRational tb;
                 ret = av_read_frame(pls->ctx, &pls->pkt);
+                av_log(pls->ctx, AV_LOG_WARNING, "MATROID DEBUG: playlist read packet %"PRId64"\n", pls->pkt.pts);
                 if (ret < 0) {
                     if (!avio_feof(&pls->pb) && ret != AVERROR_EOF)
                         return ret;
