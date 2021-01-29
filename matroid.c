@@ -39,6 +39,7 @@ int main(int argc, char* argv[])
 	AVCodecContext	*pCodecCtx;
 	AVCodec			*pCodec;
 	AVFrame	*pFrame,*pFrameYUV;
+	AVStream *pStream;
 	unsigned char *out_buffer;
 	AVPacket *packet;
 	int y_size;
@@ -69,7 +70,8 @@ int main(int argc, char* argv[])
 		"Didn't find a video stream.\n"
 	);
  
-	pCodecCtx = pFormatCtx->streams[videoindex]->codec;
+	pStream   = pFormatCtx->streams[videoindex];
+	pCodecCtx = pStream->codec;
 	pCodec    = avcodec_find_decoder(pCodecCtx->codec_id);
 	ASSERT(
 		pCodec != NULL,
@@ -106,7 +108,11 @@ int main(int argc, char* argv[])
 			if(got_picture){
 				sws_scale(img_convert_ctx, (const unsigned char* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, 
 					pFrameYUV->data, pFrameYUV->linesize);
-				printf("Frame pkt.pts=%" PRId64 " frame.pts=%" PRId64 "\n", packet->pts, pFrame->pts);
+				printf(
+					"Frame pkt.pts=%f frame.pts=%f\n",
+					packet->pts * av_q2d(pStream->time_base),
+					pFrame->pts * av_q2d(pStream->time_base)		
+				);
 			}
 		}
 		av_free_packet(packet);
@@ -115,6 +121,11 @@ int main(int argc, char* argv[])
 	while (avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet) >= 0 && got_picture) {
 		sws_scale(img_convert_ctx, (const unsigned char* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, 
 			pFrameYUV->data, pFrameYUV->linesize);
+		printf(
+			"Frame pkt.pts=%f frame.pts=%f\n",
+			packet->pts * av_q2d(pStream->time_base),
+			pFrame->pts * av_q2d(pStream->time_base)		
+		);
 	}
  
 	sws_freeContext(img_convert_ctx);
