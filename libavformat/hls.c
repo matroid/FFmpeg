@@ -921,8 +921,11 @@ static int parse_playlist(HLSContext *c, const char *url,
 
                 seg->discont_program_date_time = discont_program_date_time;
                 if (discont_program_date_time > 0) {
-                    discont_program_date_time += duration;
+                    discont_program_date_time += (double) duration / AV_TIME_BASE;
                 }
+
+                av_log(c->ctx, AV_LOG_WARNING, "Segment PDT %f Duration %f\n",
+                    seg->discont_program_date_time, (double) duration / AV_TIME_BASE);
                 
                 dynarray_add(&pls->segments, &pls->n_segments, seg);
                 is_segment = 0;
