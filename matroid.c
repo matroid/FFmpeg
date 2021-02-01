@@ -22,6 +22,25 @@
 	} \
 } while(0)
 
+void process(
+	struct SwsContext *img_convert_ctx,
+	AVStream *pStream, AVCodecContext *pCodecCtx,
+	AVPacket *packet, AVFrame *pFrame, AVFrame *pFrameYUV)
+{
+	sws_scale(
+		img_convert_ctx,
+		(const unsigned char* const*)pFrame->data,
+		pFrame->linesize, 0, pCodecCtx->height, 
+		pFrameYUV->data, pFrameYUV->linesize
+	);
+	printf(
+		"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f\n",
+		packet->pts * av_q2d(pStream->time_base),
+		packet->dts * av_q2d(pStream->time_base),
+		pFrame->pts * av_q2d(pStream->time_base)		
+	);
+}
+
 int main(int argc, char* argv[])
 {
 	ASSERT(
@@ -105,29 +124,15 @@ int main(int argc, char* argv[])
 				avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet),
 				"Decode Error.\n"
 			);
-			if(got_picture){
-				sws_scale(img_convert_ctx, (const unsigned char* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, 
-					pFrameYUV->data, pFrameYUV->linesize);
-				printf(
-					"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f\n",
-					packet->pts * av_q2d(pStream->time_base),
-					packet->dts * av_q2d(pStream->time_base),
-					pFrame->pts * av_q2d(pStream->time_base)		
-				);
+			if (got_picture) {
+				process(img_convert_ctx, pStream, pCodecCtx, packet, pFrame, pFrameYUV);
 			}
 		}
 		av_free_packet(packet);
 	}
 	// Flush last frames remained in codec
 	while (avcodec_decode_video2(pCodecCtx, pFrame, &got_picture, packet) >= 0 && got_picture) {
-		sws_scale(img_convert_ctx, (const unsigned char* const*)pFrame->data, pFrame->linesize, 0, pCodecCtx->height, 
-			pFrameYUV->data, pFrameYUV->linesize);
-		printf(
-			"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f\n",
-			packet->pts * av_q2d(pStream->time_base),
-			packet->dts * av_q2d(pStream->time_base),
-			pFrame->pts * av_q2d(pStream->time_base)		
-		);
+		process(img_convert_ctx, pStream, pCodecCtx, packet, pFrame, pFrameYUV);
 	}
  
 	sws_freeContext(img_convert_ctx);
