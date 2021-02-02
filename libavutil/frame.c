@@ -839,6 +839,7 @@ const char *av_frame_side_data_name(enum AVFrameSideDataType type)
 #if FF_API_FRAME_QP
     case AV_FRAME_DATA_QP_TABLE_PROPERTIES:         return "QP table properties";
     case AV_FRAME_DATA_QP_TABLE_DATA:               return "QP table data";
+    case AV_FRAME_DATA_GLOBAL_TIMESTAMP:            return "Matroid Global Timestamp";
 #endif
     }
     return NULL;
