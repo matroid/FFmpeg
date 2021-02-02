@@ -1373,6 +1373,11 @@ enum AVPacketSideDataType {
     AV_PKT_DATA_AFD,
 
     /**
+     * Matroid: global timestamp information for livestreams
+     */
+    AV_PKT_DATA_GLOBAL_TIMESTAMP,
+
+    /**
      * The number of side data types.
      * This is not part of the public API/ABI in the sense that it may
      * change when new side data types are added.

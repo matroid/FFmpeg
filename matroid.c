@@ -7,6 +7,7 @@
  */
  
 #include <stdio.h>
+#include <inttypes.h>
  
 #define __STDC_CONSTANT_MACROS
 
@@ -14,6 +15,7 @@
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"
 #include "libavutil/imgutils.h"
+#include "libavutil/frame.h"
 
 #define ASSERT(cond, ...) do { \
 	if (!(cond)) { \
@@ -33,11 +35,21 @@ void process(
 		pFrame->linesize, 0, pCodecCtx->height, 
 		pFrameYUV->data, pFrameYUV->linesize
 	);
+
+	uint8_t global_timestamp = 0;
+	AVFrameSideData *side_data = av_frame_get_side_data(pFrame, AV_FRAME_DATA_GLOBAL_TIMESTAMP);
+	if (side_data != NULL) {
+		uint8_t *data = side_data->data;
+		if (data != NULL && side_data->size > 0) {
+			global_timestamp = data[0];
+		}
+	}
 	printf(
-		"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f\n",
+		"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f frame.side_data.global_timestamp=%"PRIu8"\n",
 		packet->pts * av_q2d(pStream->time_base),
 		packet->dts * av_q2d(pStream->time_base),
-		pFrame->pts * av_q2d(pStream->time_base)		
+		pFrame->pts * av_q2d(pStream->time_base),
+		global_timestamp
 	);
 }
 

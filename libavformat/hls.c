@@ -2227,6 +2227,11 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
             }
         }
 
+        // Matroid Experiment
+        uint8_t *data = av_packet_new_side_data(pkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, 1);
+        if (data != NULL) {
+            data[0] = ((uint8_t) 23); // Matroid magic number
+        }
         return 0;
     }
     return AVERROR_EOF;

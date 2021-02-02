@@ -166,6 +166,11 @@ enum AVFrameSideDataType {
      * function in libavutil/timecode.c.
      */
     AV_FRAME_DATA_S12M_TIMECODE,
+
+    /**
+     * Matroid: global timestamp information for livestreams
+     */
+    AV_FRAME_DATA_GLOBAL_TIMESTAMP,
 };
 
 enum AVActiveFormatDescription {
