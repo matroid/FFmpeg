@@ -75,7 +75,7 @@ struct segment {
     uint8_t iv[16];
     /* associated Media Initialization Section, treated as a segment */
     struct segment *init_section;
-    double discont_program_date_time;
+    double program_date_time;
 };
 
 struct rendition;
@@ -707,7 +707,7 @@ static int parse_playlist(HLSContext *c, const char *url,
     struct segment **prev_segments = NULL;
     int prev_n_segments = 0;
     int prev_start_seq_no = -1;
-    double discont_program_date_time = -1;
+    double program_date_time = -1;
 
     if (is_http && !in && c->http_persistent && c->playlist_pb) {
         in = c->playlist_pb;
@@ -846,24 +846,26 @@ static int parse_playlist(HLSContext *c, const char *url,
             if (ptr)
                 seg_offset = strtoll(ptr+1, NULL, 10);
         } else if (av_strstart(line, "#EXT-X-PROGRAM-DATE-TIME:", &ptr)) {
-            struct tm program_date_time;
+            struct tm pdt;
             int y,M,d,h,m,s;
             double ms;
+
+            // TODO: take timezone into consideration
             if (sscanf(ptr, "%d-%d-%dT%d:%d:%d.%lf", &y, &M, &d, &h, &m, &s, &ms) != 7) {
                 ret = AVERROR_INVALIDDATA;
                 goto fail;
             }
 
-            program_date_time.tm_year = y - 1900;
-            program_date_time.tm_mon = M - 1;
-            program_date_time.tm_mday = d;
-            program_date_time.tm_hour = h;
-            program_date_time.tm_min = m;
-            program_date_time.tm_sec = s;
-            program_date_time.tm_isdst = -1;
+            pdt.tm_year = y - 1900;
+            pdt.tm_mon = M - 1;
+            pdt.tm_mday = d;
+            pdt.tm_hour = h;
+            pdt.tm_min = m;
+            pdt.tm_sec = s;
+            pdt.tm_isdst = -1;
 
-            discont_program_date_time = mktime(&program_date_time);
-            discont_program_date_time += (double)(ms / 1000);
+            program_date_time = mktime(&pdt);
+            program_date_time += (double)(ms / 1000);
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {
@@ -919,13 +921,13 @@ static int parse_playlist(HLSContext *c, const char *url,
                     goto fail;
                 }
 
-                seg->discont_program_date_time = discont_program_date_time;
-                if (discont_program_date_time > 0) {
-                    discont_program_date_time += (double) duration / AV_TIME_BASE;
+                seg->program_date_time = program_date_time;
+                if (program_date_time > 0) {
+                    program_date_time += (double) duration / AV_TIME_BASE;
                 }
 
                 av_log(c->ctx, AV_LOG_WARNING, "Segment PDT %f Duration %f\n",
-                    seg->discont_program_date_time, (double) duration / AV_TIME_BASE);
+                    seg->program_date_time, (double) duration / AV_TIME_BASE);
                 
                 dynarray_add(&pls->segments, &pls->n_segments, seg);
                 is_segment = 0;
@@ -2228,9 +2230,10 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
         }
 
         // Matroid Experiment
-        uint8_t *data = av_packet_new_side_data(pkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, 1);
-        if (data != NULL) {
-            data[0] = ((uint8_t) 23); // Matroid magic number
+        double *global_timestamp = (double *) av_packet_new_side_data(
+            pkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, sizeof(double));
+        if (global_timestamp != NULL) {
+            global_timestamp[0] = 3.1415926; // Matroid magic number
         }
         return 0;
     }

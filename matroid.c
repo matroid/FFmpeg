@@ -36,16 +36,16 @@ void process(
 		pFrameYUV->data, pFrameYUV->linesize
 	);
 
-	uint8_t global_timestamp = 0;
+	double global_timestamp;
 	AVFrameSideData *side_data = av_frame_get_side_data(pFrame, AV_FRAME_DATA_GLOBAL_TIMESTAMP);
 	if (side_data != NULL) {
-		uint8_t *data = side_data->data;
-		if (data != NULL && side_data->size > 0) {
-			global_timestamp = data[0];
+		double *global_timestamp_data = (double *) side_data->data;
+		if (global_timestamp_data != NULL) {
+			global_timestamp = global_timestamp_data[0];
 		}
 	}
 	printf(
-		"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f frame.side_data.global_timestamp=%"PRIu8"\n",
+		"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f frame.global_timestamp=%f\n",
 		packet->pts * av_q2d(pStream->time_base),
 		packet->dts * av_q2d(pStream->time_base),
 		pFrame->pts * av_q2d(pStream->time_base),
