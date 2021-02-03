@@ -1,5 +1,16 @@
+""" Matroid Call Stack Analysis """
 # pylint: disable=undefined-variable
-""" Call Stack """
+
+"""
+Things to blame:
+- C language has unclear function input/output (all pointers in argument list)
+- Pseudo object-oriented programming done via structs and function pointers
+- Unclear control flow with return value rather than throw exception
+  (sometimes you expect 0, sometimes you expect >0)
+- Lots of annoying goto statements
+- Separation of implementation and declaration, also still missing documentation
+- Not many great resources for learning the API systematically
+"""
 
 # 1. opens input and gets context
 AVFormatContext = avformat_open_input(path)
@@ -31,6 +42,8 @@ mpegts_read_packet(AVFormatContext)
   # ultimately we have mpegts AVFormatContext calling HLSAVIOContext.read_packet
 (hls_)read_data(HLSPlayList)
   # this is where segment swapping occurs
+  # the weird loop would break after read_from_url
+  # we'll have positive ret corresponding to bytes read
 read_from_url(HLSPlayList, HLSSegment, Buffer)
   open_input(HLSContext, HLSPlayList, Segment, AVIOContext)
   open_url(AVFormatContext, AVIOContext, ...)
@@ -40,3 +53,10 @@ avio_read(AVIOContext HLSPlayList.input)
 
 # 6. read one frame
 AVFrame = avcodec_decode_video2(AVCodecContext, AVPacket)
+
+# Misc
+(decode.c) ff_decode_frame_props # sets f->pkt_pts = pkt->pts
+# the add_metadata_from_side_data can be key to our success !!!
+# this is another breakthrough
+
+(frame.c) av_frame_new_side_data, av_frame_get_side_data

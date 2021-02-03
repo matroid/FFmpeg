@@ -76,6 +76,7 @@ struct segment {
     /* associated Media Initialization Section, treated as a segment */
     struct segment *init_section;
     double program_date_time;
+    int64_t initial_dts;
 };
 
 struct rendition;
@@ -925,9 +926,7 @@ static int parse_playlist(HLSContext *c, const char *url,
                 if (program_date_time > 0) {
                     program_date_time += (double) duration / AV_TIME_BASE;
                 }
-
-                av_log(c->ctx, AV_LOG_WARNING, "Segment PDT %f Duration %f\n",
-                    seg->program_date_time, (double) duration / AV_TIME_BASE);
+                seg->initial_dts = -1;
                 
                 dynarray_add(&pls->segments, &pls->n_segments, seg);
                 is_segment = 0;
@@ -978,8 +977,20 @@ fail:
     return ret;
 }
 
+static struct segment *closest_segment(struct playlist *pls) {
+    int n = pls->cur_seq_no - pls->start_seq_no;
+    if (n < 0)
+        return pls->segments[0];
+    if (n >= pls->n_segments)
+        return pls->segments[pls->n_segments - 1];
+    return pls->segments[pls->cur_seq_no - pls->start_seq_no];
+}
+
 static struct segment *current_segment(struct playlist *pls)
 {
+    int n = pls->cur_seq_no - pls->start_seq_no;
+    if (n >= pls->n_segments)
+        return NULL;
     return pls->segments[pls->cur_seq_no - pls->start_seq_no];
 }
 
@@ -1810,8 +1821,6 @@ static int hls_close(AVFormatContext *s)
 
 static int hls_read_header(AVFormatContext *s)
 {
-    av_log(NULL, AV_LOG_WARNING, "MATROID DEBUG: hls_read_header\n");
-
     HLSContext *c = s->priv_data;
     int ret = 0, i;
     int highest_cur_seq_no = 0;
@@ -2098,7 +2107,6 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
     recheck_discard_flags(s, c->first_packet);
     c->first_packet = 0;
 
-    av_log(s, AV_LOG_WARNING, "MATROID DEBUG: hls read packet\n");
     for (i = 0; i < c->n_playlists; i++) {
         struct playlist *pls = c->playlists[i];
         /* Make sure we've got one buffered packet from each open playlist
@@ -2107,14 +2115,31 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
             while (1) {
                 int64_t ts_diff;
                 AVRational tb;
-                ret = av_read_frame(pls->ctx, &pls->pkt);
-                av_log(pls->ctx, AV_LOG_WARNING, "MATROID DEBUG: playlist read packet %"PRId64"\n", pls->pkt.pts);
+                ret = av_read_frame(pls->ctx, &pls->pkt);                
                 if (ret < 0) {
                     if (!avio_feof(&pls->pb) && ret != AVERROR_EOF)
                         return ret;
                     reset_packet(&pls->pkt);
                     break;
                 } else {
+                    struct segment *seg = closest_segment(pls);
+                    if (seg->initial_dts < 0 && pls->pkt.dts != AV_NOPTS_VALUE) {
+                        seg->initial_dts = pls->pkt.dts;
+                    }
+                    double *global_timestamp = (double *) av_packet_new_side_data(
+                        &pls->pkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, sizeof(double));
+                    if (global_timestamp == NULL) return AVERROR(ENOMEM);
+ 
+                    if (pls->pkt.pts != AV_NOPTS_VALUE &&
+                        seg->program_date_time > 0 && seg->initial_dts > 0)
+                    {
+                        global_timestamp[0] = seg->program_date_time +
+                            (pls->pkt.pts - seg->initial_dts) * av_q2d(get_timebase(pls));
+                    } else {
+                        global_timestamp[0] = -1;
+                    }
+                    
+
                     /* stream_index check prevents matching picture attachments etc. */
                     if (pls->is_id3_timestamped && pls->pkt.stream_index == 0) {
                         /* audio elementary streams are id3 timestamped */
@@ -2229,12 +2254,6 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
             }
         }
 
-        // Matroid Experiment
-        double *global_timestamp = (double *) av_packet_new_side_data(
-            pkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, sizeof(double));
-        if (global_timestamp != NULL) {
-            global_timestamp[0] = 3.1415926; // Matroid magic number
-        }
         return 0;
     }
     return AVERROR_EOF;

@@ -51,6 +51,8 @@ void process(
 		pFrame->pts * av_q2d(pStream->time_base),
 		global_timestamp
 	);
+
+	av_frame_unref(pFrame);
 }
 
 int main(int argc, char* argv[])
