@@ -8,10 +8,12 @@
  */
  
 #include <stdio.h>
+#include <time.h>
 #include <inttypes.h>
 #include <jpeglib.h> 
 
 #define __STDC_CONSTANT_MACROS
+#define FPS 1.0
 
 #include "libavcodec/avcodec.h"
 #include "libavformat/avformat.h"
@@ -34,6 +36,15 @@ int process(
 	struct SwsContext *img_convert_ctx,
 	AVPacket *packet, AVFrame *frame, AVFrame *frameYUV)
 {
+	// throttle based on FPS
+	static int64_t last_frame_pts = -1;
+	if (av_q2d(stream->time_base) * (frame->pts - last_frame_pts) < (1 / FPS)) {
+		return 0; // SKIP
+	} else {
+		last_frame_pts = frame->pts;
+	} // TODO: this method outputs frames slightly slower than FPS 
+
+	// convert to YUV420P pixel format
 	sws_scale(
 		img_convert_ctx,
 		(const unsigned char* const*)frame->data,
@@ -44,15 +55,19 @@ int process(
 	frameYUV->width  = frame->width;
 	frameYUV->height = frame->height;
 
-	double global_timestamp;
+	// extract global timestamp
+	struct timespec ts;
+	timespec_get(&ts, TIME_UTC);
+	double global_timestamp = ts.tv_sec + ts.tv_nsec / 1000000000.0;
 	AVFrameSideData *side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_GLOBAL_TIMESTAMP);
 	if (side_data != NULL) {
 		double *global_timestamp_data = (double *) side_data->data;
-		if (global_timestamp_data != NULL) {
+		if (global_timestamp_data != NULL && global_timestamp_data[0] > 0) {
 			global_timestamp = global_timestamp_data[0];
 		}
 	}
     
+	// encode YUV data to JPEG
 	AVPacket opkt = {.data = NULL, .size = 0};
     av_init_packet(&opkt);
     int gotFrame;
@@ -61,6 +76,7 @@ int process(
 		"jpeg encoding failed"
 	);
 
+	// write JPEG to file
 	char jpg_name[32];
     sprintf(jpg_name, "%017.06f.jpg", global_timestamp);
     FILE *jpg_file = fopen(jpg_name, "wb");
@@ -83,33 +99,34 @@ int main(int argc, char* argv[])
 	printf("##### MATROID BEGIN #####\n");
 	printf("#########################\n");
 
+	// initialize AVFormatContext
 	av_register_all();
 	avformat_network_init();
 	AVFormatContext	*fmtCtx = avformat_alloc_context();
- 
 	ASSERT(
 		avformat_open_input(&fmtCtx, filepath, NULL, NULL) == 0,
 		"Couldn't open input stream '%s'.\n", filepath
 	);
-
 	ASSERT(
 		avformat_find_stream_info(fmtCtx, NULL) == 0,
 		"Couldn't find stream information.\n"
 	);
 
+	// find video stream index
 	int videoindex = -1;
 	for (int i = 0; i < fmtCtx->nb_streams; i++) {
 		if (fmtCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
 			videoindex = i; break; } }
-
 	ASSERT(videoindex != -1, "Didn't find a video stream.\n");
  
+	// initialize inputCodecContext
 	AVStream 		*stream        = fmtCtx->streams[videoindex];
 	AVCodecContext	*inputCodecCtx = stream->codec;
 	AVCodec			*inputCodec    = avcodec_find_decoder(inputCodecCtx->codec_id);
 	ASSERT(inputCodec != NULL, "Codec not found.\n");
 	ASSERT(avcodec_open2(inputCodecCtx, inputCodec, NULL) >= 0, "Could not open codec.\n");
 
+	// initialize outputCodecContext
 	AVCodec        *outputCodec    = avcodec_find_encoder(AV_CODEC_ID_MJPEG);
 	ASSERT(outputCodec != NULL, "Codec not found.\n");
 	AVCodecContext *outputCodecCtx = avcodec_alloc_context3(outputCodec);
@@ -122,6 +139,7 @@ int main(int argc, char* argv[])
     outputCodecCtx->global_quality = FF_QP2LAMBDA * 1;
 	ASSERT(avcodec_open2(outputCodecCtx, outputCodec, NULL) >= 0, "Could not open codec.\n");
 	
+	// initialize frame and packet variables
 	AVPacket *packet   = av_packet_alloc();
 	AVFrame  *frame    = av_frame_alloc();
 	AVFrame  *frameYUV = av_frame_alloc();
@@ -133,11 +151,12 @@ int main(int argc, char* argv[])
 	struct SwsContext *img_convert_ctx = sws_getContext(inputCodecCtx->width, inputCodecCtx->height, inputCodecCtx->pix_fmt, 
 		inputCodecCtx->width, inputCodecCtx->height, AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
 
-	//Output Info-----------------------------
+	// output stream information
 	printf("--------------- File Information ----------------\n");
 	av_dump_format(fmtCtx, 0, filepath, 0);
 	printf("-------------------------------------------------\n");
 
+	// main loop
 	int got_picture = 0;
 	while (av_read_frame(fmtCtx, packet) >= 0) {
 		if(packet->stream_index == videoindex){
@@ -151,11 +170,12 @@ int main(int argc, char* argv[])
 		}
 		av_free_packet(packet);
 	}
-	// Flush last frames remained in codec
+	// flush all internal queues
 	while (avcodec_decode_video2(inputCodecCtx, frame, &got_picture, packet) >= 0 && got_picture) {
 		process(stream, inputCodecCtx, outputCodecCtx, img_convert_ctx, packet, frame, frameYUV);
 	}
  
+	// free up resources
 	av_frame_free(&frame);
 	avcodec_close(inputCodecCtx);
 	avcodec_close(outputCodecCtx);
