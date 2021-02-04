@@ -18,6 +18,7 @@
 #include "libavutil/imgutils.h"
 #include "libavutil/frame.h"
 #include "libavutil/rational.h"
+#include "libswscale/swscale.h"
 
 #define ASSERT(cond, ...) do { \
 	if (!(cond)) { \
@@ -30,8 +31,19 @@ int process(
 	AVStream *stream,
 	AVCodecContext *inputCodecCtx,
 	AVCodecContext *outputCodecCtx,
-	AVPacket *packet, AVFrame *frame)
+	struct SwsContext *img_convert_ctx,
+	AVPacket *packet, AVFrame *frame, AVFrame *frameYUV)
 {
+	sws_scale(
+		img_convert_ctx,
+		(const unsigned char* const*)frame->data,
+		frame->linesize, 0, inputCodecCtx->height, 
+		frameYUV->data, frameYUV->linesize
+	);
+	frameYUV->format = AV_PIX_FMT_YUV420P;
+	frameYUV->width  = frame->width;
+	frameYUV->height = frame->height;
+
 	double global_timestamp;
 	AVFrameSideData *side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_GLOBAL_TIMESTAMP);
 	if (side_data != NULL) {
@@ -40,31 +52,22 @@ int process(
 			global_timestamp = global_timestamp_data[0];
 		}
 	}
-	/*printf(
-		"Frame pkt.pts=%f pkt.dts=%f frame.pts=%f frame.global_timestamp=%f\n",
-		packet->pts * av_q2d(stream->time_base),
-		packet->dts * av_q2d(stream->time_base),
-		frame->pts * av_q2d(stream->time_base),
-		global_timestamp
-	);*/
-
     
 	AVPacket opkt = {.data = NULL, .size = 0};
     av_init_packet(&opkt);
     int gotFrame;
     ASSERT(
-		avcodec_encode_video2(outputCodecCtx, &opkt, frame, &gotFrame) >= 0,
+		avcodec_encode_video2(outputCodecCtx, &opkt, frameYUV, &gotFrame) >= 0,
 		"jpeg encoding failed"
 	);
 
 	char jpg_name[32];
     sprintf(jpg_name, "%017.06f.jpg", global_timestamp);
     FILE *jpg_file = fopen(jpg_name, "wb");
-	// printf("writing to file %s\n", jpg_name);
     fwrite(opkt.data, 1, opkt.size, jpg_file);
     fclose(jpg_file);
-
 	av_frame_unref(frame);
+
 	return 0;
 }
 
@@ -112,13 +115,23 @@ int main(int argc, char* argv[])
 	AVCodecContext *outputCodecCtx = avcodec_alloc_context3(outputCodec);
 	ASSERT(outputCodecCtx != NULL, "Could not open codec.\n");
 	outputCodecCtx->time_base = AV_TIME_BASE_Q;
-	outputCodecCtx->pix_fmt = AV_PIX_FMT_YUVJ420P;
-	outputCodecCtx->width  = inputCodecCtx->width;
-	outputCodecCtx->height = inputCodecCtx->height; 
+	outputCodecCtx->pix_fmt   = AV_PIX_FMT_YUVJ420P;
+	outputCodecCtx->width     = inputCodecCtx->width;
+	outputCodecCtx->height    = inputCodecCtx->height; 
+	outputCodecCtx->flags    |= AV_CODEC_FLAG_QSCALE;
+    outputCodecCtx->global_quality = FF_QP2LAMBDA * 1;
 	ASSERT(avcodec_open2(outputCodecCtx, outputCodec, NULL) >= 0, "Could not open codec.\n");
 	
-	AVFrame  *frame  = av_frame_alloc();
-	AVPacket *packet = av_packet_alloc();
+	AVPacket *packet   = av_packet_alloc();
+	AVFrame  *frame    = av_frame_alloc();
+	AVFrame  *frameYUV = av_frame_alloc();
+	unsigned char *out_buffer = (unsigned char *) av_malloc(
+		av_image_get_buffer_size(AV_PIX_FMT_YUV420P, inputCodecCtx->width, inputCodecCtx->height, 1)
+	);
+	av_image_fill_arrays(frameYUV->data, frameYUV->linesize, out_buffer,
+		AV_PIX_FMT_YUV420P, inputCodecCtx->width, inputCodecCtx->height, 1);
+	struct SwsContext *img_convert_ctx = sws_getContext(inputCodecCtx->width, inputCodecCtx->height, inputCodecCtx->pix_fmt, 
+		inputCodecCtx->width, inputCodecCtx->height, AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL); 
 
 	//Output Info-----------------------------
 	printf("--------------- File Information ----------------\n");
@@ -133,14 +146,14 @@ int main(int argc, char* argv[])
 				"Decode Error.\n"
 			);
 			if (got_picture) {
-				process(stream, inputCodecCtx, outputCodecCtx, packet, frame);
+				process(stream, inputCodecCtx, outputCodecCtx, img_convert_ctx, packet, frame, frameYUV);
 			}
 		}
 		av_free_packet(packet);
 	}
 	// Flush last frames remained in codec
 	while (avcodec_decode_video2(inputCodecCtx, frame, &got_picture, packet) >= 0 && got_picture) {
-		process(stream, inputCodecCtx, outputCodecCtx, packet, frame);
+		process(stream, inputCodecCtx, outputCodecCtx, img_convert_ctx, packet, frame, frameYUV);
 	}
  
 	av_frame_free(&frame);
