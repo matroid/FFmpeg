@@ -4669,11 +4669,11 @@ uint64_t ff_get_formatted_ntp_time(uint64_t ntp_time_us)
 int av_get_frame_filename2(char *buf, int buf_size, const char *path,
                            int number, int flags, int64_t ts)
 {
-    return av_get_frame_filename3(buf, buf_size, path, number, flags, ts, 0);
+    return av_get_frame_filename3(buf, buf_size, path, number, flags, ts, 0, -1);
 }
 
 int av_get_frame_filename3(char *buf, int buf_size, const char *path,
-                           int number, int flags, int64_t ts, double duration)
+                           int number, int flags, int64_t ts, double duration, double global_timestamp)
 {
     const char *p;
     char *q, buf1[32], c;
@@ -4714,8 +4714,6 @@ int av_get_frame_filename3(char *buf, int buf_size, const char *path,
                 if (!(flags & AV_FRAME_FILENAME_FLAGS_MULTIPLE) && percentd_found)
                     goto fail;
                 percentd_found = 1;
-                if (ts < 0)
-                    goto fail;
                 int64_t seconds   = ts / AV_TIME_BASE;
                 int64_t microsecs = ts % AV_TIME_BASE;
                 snprintf(buf1, sizeof(buf1), "%010" PRId64 ".%06" PRId64, seconds, microsecs);
@@ -4729,9 +4727,18 @@ int av_get_frame_filename3(char *buf, int buf_size, const char *path,
                 if (!(flags & AV_FRAME_FILENAME_FLAGS_MULTIPLE) && percentd_found)
                     goto fail;
                 percentd_found = 1;
-                if (ts < 0)
-                    goto fail;
                 snprintf(buf1, sizeof(buf1), "%017.6f", duration);
+                len = strlen(buf1);
+                if ((q - buf + len) > buf_size - 1)
+                    goto fail;
+                memcpy(q, buf1, len);
+                q += len;
+                break;
+            case 'g':
+                if (!(flags & AV_FRAME_FILENAME_FLAGS_MULTIPLE) && percentd_found)
+                    goto fail;
+                percentd_found = 1;
+                snprintf(buf1, sizeof(buf1), "%017.6f", global_timestamp);
                 len = strlen(buf1);
                 if ((q - buf + len) > buf_size - 1)
                     goto fail;
