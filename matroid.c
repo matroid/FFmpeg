@@ -77,8 +77,8 @@ int process(
 	);
 
 	// write JPEG to file
-	char jpg_name[32];
-    sprintf(jpg_name, "%017.06f.jpg", global_timestamp);
+	char jpg_name[64];
+    sprintf(jpg_name, "frame_%017.06f_%017.06f_.jpg", global_timestamp, av_q2d(stream->time_base) * frame->pts);
     FILE *jpg_file = fopen(jpg_name, "wb");
     fwrite(opkt.data, 1, opkt.size, jpg_file);
     fclose(jpg_file);
