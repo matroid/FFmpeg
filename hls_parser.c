@@ -91,7 +91,7 @@ int main(int argc, char* argv[])
 {
 	ASSERT(
 		argc == 2,
-		"Usage: ./matroid [path/to/media]\n"
+		"Usage: %s [path/to/media]\n", argv[0]
 	);
 	char *filepath = argv[1];
 
