@@ -38,6 +38,8 @@ int process(
 {
 	// throttle based on FPS
 	static int64_t last_frame_pts = -1;
+	static double strftime = -1;
+
 	if (av_q2d(stream->time_base) * (frame->pts - last_frame_pts) < (1 / FPS)) {
 		return 0; // SKIP
 	} else {
@@ -56,9 +58,13 @@ int process(
 	frameYUV->height = frame->height;
 
 	// extract global timestamp
-	struct timespec ts;
-	timespec_get(&ts, TIME_UTC);
-	double global_timestamp = ts.tv_sec + ts.tv_nsec / 1000000000.0;
+	if (strftime < 0) {
+		struct timespec ts;
+		timespec_get(&ts, TIME_UTC);
+		strftime = ts.tv_sec + ts.tv_nsec / 1000000000.0 - av_q2d(stream->time_base) * frame->pts;
+	}
+
+	double global_timestamp = strftime + av_q2d(stream->time_base) * frame->pts;
 	AVFrameSideData *side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_GLOBAL_TIMESTAMP);
 	if (side_data != NULL) {
 		double *global_timestamp_data = (double *) side_data->data;
@@ -111,6 +117,7 @@ int main(int argc, char* argv[])
 		avformat_find_stream_info(fmtCtx, NULL) == 0,
 		"Couldn't find stream information.\n"
 	);
+	fmtCtx->flags |= AVFMT_FLAG_GENPTS;
 
 	// find video stream index
 	int videoindex = -1;
