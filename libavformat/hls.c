@@ -867,6 +867,7 @@ static int parse_playlist(HLSContext *c, const char *url,
 
             program_date_time = mktime(&pdt);
             program_date_time += (double)(ms / 1000);
+            // TODO: avoid rounding errors by tracking ms separately
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {
