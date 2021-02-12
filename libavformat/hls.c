@@ -848,11 +848,11 @@ static int parse_playlist(HLSContext *c, const char *url,
                 seg_offset = strtoll(ptr+1, NULL, 10);
         } else if (av_strstart(line, "#EXT-X-PROGRAM-DATE-TIME:", &ptr)) {
             struct tm pdt;
-            int y,M,d,h,m,s;
-            double ms;
+            int y,M,d,h,m;
+            double s;
 
             // TODO: take timezone into consideration
-            if (sscanf(ptr, "%d-%d-%dT%d:%d:%d.%lf", &y, &M, &d, &h, &m, &s, &ms) != 7) {
+            if (sscanf(ptr, "%d-%d-%dT%d:%d:%lf", &y, &M, &d, &h, &m, &s) != 6) {
                 ret = AVERROR_INVALIDDATA;
                 goto fail;
             }
@@ -862,11 +862,11 @@ static int parse_playlist(HLSContext *c, const char *url,
             pdt.tm_mday = d;
             pdt.tm_hour = h;
             pdt.tm_min = m;
-            pdt.tm_sec = s;
+            pdt.tm_sec = 0;
             pdt.tm_isdst = -1;
 
-            program_date_time = mktime(&pdt);
-            program_date_time += (double)(ms / 1000);
+            program_date_time = timegm(&pdt);
+            program_date_time += s;
             // TODO: avoid rounding errors by tracking ms separately
         } else if (av_strstart(line, "#", NULL)) {
             continue;
@@ -2139,7 +2139,6 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
                     } else {
                         global_timestamp[0] = -1;
                     }
-                    
 
                     /* stream_index check prevents matching picture attachments etc. */
                     if (pls->is_id3_timestamped && pls->pkt.stream_index == 0) {
