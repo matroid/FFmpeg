@@ -38,6 +38,8 @@
 #include "internal.h"
 #include "avio_internal.h"
 #include "id3v2.h"
+
+#define _DEFAULT_SOURCE
 #include <time.h>
 
 #define INITIAL_BUFFER_SIZE 32768
