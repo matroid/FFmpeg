@@ -38,9 +38,7 @@
 #include "internal.h"
 #include "avio_internal.h"
 #include "id3v2.h"
-
-#define _DEFAULT_SOURCE
-#include <time.h>
+#include "libavutil/strftime_micro.h"
 
 #define INITIAL_BUFFER_SIZE 32768
 
@@ -868,7 +866,7 @@ static int parse_playlist(HLSContext *c, const char *url,
             pdt.tm_sec = 0;
             pdt.tm_isdst = -1;
 
-            program_date_time = timegm(&pdt);
+            program_date_time = my_timegm(&pdt);
             program_date_time += s;
             // TODO: avoid rounding errors by tracking ms separately
         } else if (av_strstart(line, "#", NULL)) {
