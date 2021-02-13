@@ -1705,7 +1705,6 @@ int ff_decode_frame_props(AVCodecContext *avctx, AVFrame *frame)
         { AV_PKT_DATA_MASTERING_DISPLAY_METADATA, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA },
         { AV_PKT_DATA_CONTENT_LIGHT_LEVEL,        AV_FRAME_DATA_CONTENT_LIGHT_LEVEL },
         { AV_PKT_DATA_A53_CC,                     AV_FRAME_DATA_A53_CC },
-        { AV_PKT_DATA_GLOBAL_TIMESTAMP,           AV_FRAME_DATA_GLOBAL_TIMESTAMP },
     };
 
     if (pkt) {
@@ -1718,6 +1717,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
         frame->pkt_pos      = pkt->pos;
         frame->pkt_duration = pkt->duration;
         frame->pkt_size     = pkt->size;
+        frame->gts          = pkt->gts;
 
         for (i = 0; i < FF_ARRAY_ELEMS(sd); i++) {
             int size;

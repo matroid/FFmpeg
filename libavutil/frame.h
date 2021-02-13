@@ -166,11 +166,6 @@ enum AVFrameSideDataType {
      * function in libavutil/timecode.c.
      */
     AV_FRAME_DATA_S12M_TIMECODE,
-
-    /**
-     * Matroid: global timestamp information for livestreams
-     */
-    AV_FRAME_DATA_GLOBAL_TIMESTAMP,
 };
 
 enum AVActiveFormatDescription {
@@ -607,6 +602,8 @@ typedef struct AVFrame {
      * for the target frame's private_ref field.
      */
     AVBufferRef *private_ref;
+
+    double gts;
 } AVFrame;
 
 #if FF_API_FRAME_GET_SET

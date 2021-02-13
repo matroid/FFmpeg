@@ -2128,17 +2128,14 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
                     if (seg->initial_dts < 0 && pls->pkt.dts != AV_NOPTS_VALUE) {
                         seg->initial_dts = pls->pkt.dts;
                     }
-                    double *global_timestamp = (double *) av_packet_new_side_data(
-                        &pls->pkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, sizeof(double));
-                    if (global_timestamp == NULL) return AVERROR(ENOMEM);
  
                     if (pls->pkt.pts != AV_NOPTS_VALUE &&
                         seg->program_date_time > 0 && seg->initial_dts > 0)
                     {
-                        global_timestamp[0] = seg->program_date_time +
+                        pls->pkt.gts = seg->program_date_time +
                             (pls->pkt.pts - seg->initial_dts) * av_q2d(get_timebase(pls));
                     } else {
-                        global_timestamp[0] = -1;
+                        pls->pkt.gts = -1;
                     }
 
                     /* stream_index check prevents matching picture attachments etc. */

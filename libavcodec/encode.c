@@ -336,13 +336,8 @@ int attribute_align_arg avcodec_encode_video2(AVCodecContext *avctx,
     if (ret < 0 || !*got_packet_ptr)
         av_packet_unref(avpkt);
 
-    if (frame != NULL) {    
-        AVFrameSideData *frame_sd = av_frame_get_side_data(frame, AV_FRAME_DATA_GLOBAL_TIMESTAMP);
-        if (frame_sd != NULL) {
-            uint8_t *packet_sd = av_packet_new_side_data(avpkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, frame_sd->size);
-            if (packet_sd == NULL) return AVERROR(ENOMEM);
-            memcpy(packet_sd, frame_sd->data, frame_sd->size);
-        }
+    if (frame != NULL && avpkt->gts < 0) {
+        avpkt->gts = frame->gts;
     }
 
     return ret;

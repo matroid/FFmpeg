@@ -908,10 +908,7 @@ calc_times:
             }
         }
         if (seg->use_global_timestamp) {
-            double *global_timestamp = (double *) av_packet_get_side_data(pkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, NULL);
-            if (global_timestamp != NULL && global_timestamp[0] > 0 && seg->global_timestamp < 0) {
-                seg->global_timestamp = global_timestamp[0];
-            }
+            seg->global_timestamp = pkt->gts;
         }
     }
 

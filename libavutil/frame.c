@@ -163,6 +163,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     frame->color_range         = AVCOL_RANGE_UNSPECIFIED;
     frame->chroma_location     = AVCHROMA_LOC_UNSPECIFIED;
     frame->flags               = 0;
+    frame->gts                 = -1;
 }
 
 static void free_side_data(AVFrameSideData **ptr_sd)
@@ -204,7 +205,6 @@ void av_frame_free(AVFrame **frame)
     if (!frame || !*frame)
         return;
 
-    wipe_side_data(*frame);
     av_frame_unref(*frame);
     av_freep(frame);
 }
@@ -374,6 +374,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     dst->colorspace             = src->colorspace;
     dst->color_range            = src->color_range;
     dst->chroma_location        = src->chroma_location;
+    dst->gts                    = src->gts;
 
     av_dict_copy(&dst->metadata, src->metadata, 0);
 
@@ -840,7 +841,6 @@ const char *av_frame_side_data_name(enum AVFrameSideDataType type)
 #if FF_API_FRAME_QP
     case AV_FRAME_DATA_QP_TABLE_PROPERTIES:         return "QP table properties";
     case AV_FRAME_DATA_QP_TABLE_DATA:               return "QP table data";
-    case AV_FRAME_DATA_GLOBAL_TIMESTAMP:            return "Matroid Global Timestamp";
 #endif
     }
     return NULL;

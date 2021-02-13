@@ -109,11 +109,7 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt)
             }
 
             if (img->frame_pts || img->use_global_timestamp) {
-                double global_timestamp = -1;
-                double *gt = (double *) av_packet_get_side_data(pkt, AV_PKT_DATA_GLOBAL_TIMESTAMP, NULL);
-                if (gt != NULL) {
-                    global_timestamp = gt[0];
-                }
+                double global_timestamp = pkt->gts;
                 if (av_get_frame_filename3(filename, sizeof(filename), temp_name, pkt->pts, AV_FRAME_FILENAME_FLAGS_MULTIPLE, ts, 0, global_timestamp) < 0) {
                     av_log(s, AV_LOG_ERROR, "Cannot write filename by pts of the frames.");
                     return AVERROR(EINVAL);

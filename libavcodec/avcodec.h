@@ -1373,11 +1373,6 @@ enum AVPacketSideDataType {
     AV_PKT_DATA_AFD,
 
     /**
-     * Matroid: global timestamp information for livestreams
-     */
-    AV_PKT_DATA_GLOBAL_TIMESTAMP,
-
-    /**
      * The number of side data types.
      * This is not part of the public API/ABI in the sense that it may
      * change when new side data types are added.
@@ -1478,6 +1473,8 @@ typedef struct AVPacket {
     attribute_deprecated
     int64_t convergence_duration;
 #endif
+
+    double gts;
 } AVPacket;
 #define AV_PKT_FLAG_KEY     0x0001 ///< The packet contains a keyframe
 #define AV_PKT_FLAG_CORRUPT 0x0002 ///< The packet content is corrupted

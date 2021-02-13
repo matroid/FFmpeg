@@ -64,14 +64,7 @@ int process(
         strftime = ts.tv_sec + ts.tv_nsec / 1000000000.0 - av_q2d(stream->time_base) * frame->pts;
     }
 
-    double global_timestamp = strftime + av_q2d(stream->time_base) * frame->pts;
-    AVFrameSideData *side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_GLOBAL_TIMESTAMP);
-    if (side_data != NULL) {
-        double *global_timestamp_data = (double *) side_data->data;
-        if (global_timestamp_data != NULL && global_timestamp_data[0] > 0) {
-            global_timestamp = global_timestamp_data[0];
-        }
-    }
+    double global_timestamp = frame->gts;
     
     // encode YUV data to JPEG
     AVPacket opkt = {.data = NULL, .size = 0};

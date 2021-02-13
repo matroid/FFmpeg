@@ -35,6 +35,7 @@ void av_init_packet(AVPacket *pkt)
     pkt->pts                  = AV_NOPTS_VALUE;
     pkt->dts                  = AV_NOPTS_VALUE;
     pkt->pos                  = -1;
+    pkt->gts                  = -1;
     pkt->duration             = 0;
 #if FF_API_CONVERGENCE_DURATION
 FF_DISABLE_DEPRECATION_WARNINGS
@@ -64,7 +65,6 @@ void av_packet_free(AVPacket **pkt)
     if (!pkt || !*pkt)
         return;
 
-    av_packet_free_side_data(*pkt);
     av_packet_unref(*pkt);
     av_freep(pkt);
 }
@@ -395,7 +395,6 @@ const char *av_packet_side_data_name(enum AVPacketSideDataType type)
     case AV_PKT_DATA_ENCRYPTION_INIT_INFO:       return "Encryption initialization data";
     case AV_PKT_DATA_ENCRYPTION_INFO:            return "Encryption info";
     case AV_PKT_DATA_AFD:                        return "Active Format Description data";
-    case AV_PKT_DATA_GLOBAL_TIMESTAMP:           return "Matroid Global Timestamp";
     }
     return NULL;
 }
@@ -569,6 +568,7 @@ int av_packet_copy_props(AVPacket *dst, const AVPacket *src)
 
     dst->pts                  = src->pts;
     dst->dts                  = src->dts;
+    dst->gts                  = src->gts;
     dst->pos                  = src->pos;
     dst->duration             = src->duration;
 #if FF_API_CONVERGENCE_DURATION
