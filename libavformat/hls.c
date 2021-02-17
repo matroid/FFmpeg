@@ -869,7 +869,6 @@ static int parse_playlist(HLSContext *c, const char *url,
             program_date_time = my_timegm(&pdt);
             program_date_time += s;
             // TODO: avoid rounding errors by tracking ms separately
-            av_log(c->ctx, AV_LOG_ERROR, "PDT: %s Time: %lf\n", ptr, program_date_time);
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {

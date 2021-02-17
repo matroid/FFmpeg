@@ -907,7 +907,7 @@ calc_times:
                 seg->segment_ts = av_rescale_q(pkt->pts, st->time_base, AV_TIME_BASE_Q);
             }
         }
-        if (seg->use_global_timestamp) {
+        if (seg->use_global_timestamp && seg->global_timestamp < 0 && pkt->gts > 0) {
             seg->global_timestamp = pkt->gts;
         }
     }

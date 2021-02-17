@@ -2055,6 +2055,7 @@ static void do_streamcopy(InputStream *ist, OutputStream *ost, const AVPacket *p
     else
         opkt.dts = av_rescale_q(pkt->dts, ist->st->time_base, ost->mux_timebase);
     opkt.dts -= ost_tb_start_time;
+    opkt.gts = pkt->gts;
 
     if (ost->st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && pkt->dts != AV_NOPTS_VALUE) {
         int duration = av_get_audio_frame_duration(ist->dec_ctx, pkt->size);
