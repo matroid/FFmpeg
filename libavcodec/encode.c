@@ -294,8 +294,8 @@ int attribute_align_arg avcodec_encode_video2(AVCodecContext *avctx,
     av_assert0(avctx->codec->encode2);
 
     ret = avctx->codec->encode2(avctx, avpkt, frame, got_packet_ptr);
-    if (frame != NULL && avpkt->gts_base <= 0) {
-        avpkt->gts_base = frame->gts_base;
+    if (frame != NULL && avpkt->gts <= 0) {
+        avpkt->gts = frame->gts;
     }
     av_assert0(ret <= 0);
 

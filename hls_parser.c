@@ -83,7 +83,7 @@ int process(
     // fwrite(opkt.data, 1, opkt.size, jpg_file);
     // fclose(jpg_file);
 
-    fprintf(stderr, "if->gts=%lf of->gts=%lf op->gts=%lf\n", frame->gts_base + frame->pts * av_q2d(stream->time_base), frameYUV->gts_base + frameYUV->pts * av_q2d(stream->time_base), opkt.gts_base + opkt.pts * av_q2d(stream->time_base));
+    fprintf(stderr, "frame->pts=%lf frame->gts=%lf\n", frame->pts * av_q2d(stream->time_base), frame->gts);
 
     av_frame_unref(frame);
 

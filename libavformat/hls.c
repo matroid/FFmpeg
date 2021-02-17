@@ -869,6 +869,7 @@ static int parse_playlist(HLSContext *c, const char *url,
             program_date_time = my_timegm(&pdt);
             program_date_time += s;
             // TODO: avoid rounding errors by tracking ms separately
+            av_log(c->ctx, AV_LOG_ERROR, "PDT: %s Time: %lf\n", ptr, program_date_time);
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {
@@ -2086,8 +2087,8 @@ static void fill_timing_for_id3_timestamped_stream(struct playlist *pls)
 
 static AVRational get_timebase(struct playlist *pls)
 {
-    if (pls->is_id3_timestamped)
-        return MPEG_TIME_BASE_Q;
+    //if (pls->is_id3_timestamped)
+    //    return MPEG_TIME_BASE_Q;
 
     return pls->ctx->streams[pls->pkt.stream_index]->time_base;
 }
@@ -2129,12 +2130,11 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
                         seg->initial_dts = pls->pkt.dts;
                     }
  
-                    if (pls->pkt.pts != AV_NOPTS_VALUE &&
-                        seg->program_date_time > 0 && seg->initial_dts > 0)
+                    if (pls->pkt.pts != AV_NOPTS_VALUE && seg->program_date_time > 0 && seg->initial_dts > 0)
                     {
-                        pls->pkt.gts_base = seg->program_date_time - seg->initial_dts * av_q2d(get_timebase(pls));
+                        pls->pkt.gts = seg->program_date_time + (pls->pkt.pts - seg->initial_dts) * av_q2d(get_timebase(pls));
                     } else {
-                        pls->pkt.gts_base = -1;
+                        pls->pkt.gts = -1;
                     }
 
                     /* stream_index check prevents matching picture attachments etc. */
