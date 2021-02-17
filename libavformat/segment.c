@@ -908,7 +908,7 @@ calc_times:
             }
         }
         if (seg->use_global_timestamp) {
-            seg->global_timestamp = pkt->gts_base >= 0 ? pkt->gts_base + pkt->pts * av_q2d(st->time_base) : -1;
+            seg->global_timestamp = pkt->gts_base > 0 ? pkt->gts_base + pkt->pts * av_q2d(st->time_base) : -1;
         }
     }
 
