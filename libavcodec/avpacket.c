@@ -35,7 +35,7 @@ void av_init_packet(AVPacket *pkt)
     pkt->pts                  = AV_NOPTS_VALUE;
     pkt->dts                  = AV_NOPTS_VALUE;
     pkt->pos                  = -1;
-    pkt->gts                  = -1;
+    pkt->gts_base             = -1;
     pkt->duration             = 0;
 #if FF_API_CONVERGENCE_DURATION
 FF_DISABLE_DEPRECATION_WARNINGS
@@ -568,7 +568,7 @@ int av_packet_copy_props(AVPacket *dst, const AVPacket *src)
 
     dst->pts                  = src->pts;
     dst->dts                  = src->dts;
-    dst->gts                  = src->gts;
+    dst->gts_base             = src->gts_base;
     dst->pos                  = src->pos;
     dst->duration             = src->duration;
 #if FF_API_CONVERGENCE_DURATION

@@ -1089,9 +1089,9 @@ int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
             strcmp(link->dst->filter->name, "idet") &&
             strcmp(link->dst->filter->name, "null") &&
             strcmp(link->dst->filter->name, "scale")) {
-            av_assert1(frame->format                 == link->format);
-            av_assert1(frame->width               == link->w);
-            av_assert1(frame->height               == link->h);
+            av_assert1(frame->format == link->format);
+            av_assert1(frame->width  == link->w);
+            av_assert1(frame->height == link->h);
         }
     } else {
         if (frame->format != link->format) {

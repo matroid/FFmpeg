@@ -56,6 +56,7 @@ int process(
     frameYUV->format = AV_PIX_FMT_YUV420P;
     frameYUV->width  = frame->width;
     frameYUV->height = frame->height;
+    av_frame_copy_props(frameYUV, frame);
 
     // extract global timestamp
     if (strftime < 0) {
@@ -64,7 +65,7 @@ int process(
         strftime = ts.tv_sec + ts.tv_nsec / 1000000000.0 - av_q2d(stream->time_base) * frame->pts;
     }
 
-    double global_timestamp = frame->gts;
+    // double global_timestamp = frame->gts;
     
     // encode YUV data to JPEG
     AVPacket opkt = {.data = NULL, .size = 0};
@@ -76,11 +77,14 @@ int process(
     );
 
     // write JPEG to file
-    char jpg_name[64];
-    sprintf(jpg_name, "frame_%017.06f_%017.06f_.jpg", global_timestamp, av_q2d(stream->time_base) * frame->pts);
-    FILE *jpg_file = fopen(jpg_name, "wb");
-    fwrite(opkt.data, 1, opkt.size, jpg_file);
-    fclose(jpg_file);
+    // char jpg_name[64];
+    // sprintf(jpg_name, "frame_%017.06f_%017.06f_.jpg", global_timestamp, av_q2d(stream->time_base) * frame->pts);
+    // FILE *jpg_file = fopen(jpg_name, "wb");
+    // fwrite(opkt.data, 1, opkt.size, jpg_file);
+    // fclose(jpg_file);
+
+    fprintf(stderr, "if->gts=%lf of->gts=%lf op->gts=%lf\n", frame->gts_base + frame->pts * av_q2d(stream->time_base), frameYUV->gts_base + frameYUV->pts * av_q2d(stream->time_base), opkt.gts_base + opkt.pts * av_q2d(stream->time_base));
+
     av_frame_unref(frame);
 
     return 0;

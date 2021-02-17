@@ -294,6 +294,9 @@ int attribute_align_arg avcodec_encode_video2(AVCodecContext *avctx,
     av_assert0(avctx->codec->encode2);
 
     ret = avctx->codec->encode2(avctx, avpkt, frame, got_packet_ptr);
+    if (frame != NULL && avpkt->gts_base <= 0) {
+        avpkt->gts_base = frame->gts_base;
+    }
     av_assert0(ret <= 0);
 
     emms_c();
@@ -335,10 +338,6 @@ int attribute_align_arg avcodec_encode_video2(AVCodecContext *avctx,
 
     if (ret < 0 || !*got_packet_ptr)
         av_packet_unref(avpkt);
-
-    if (frame != NULL && avpkt->gts < 0) {
-        avpkt->gts = frame->gts;
-    }
 
     return ret;
 }

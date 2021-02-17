@@ -60,3 +60,18 @@ AVFrame = avcodec_decode_video2(AVCodecContext, AVPacket)
 # this is another breakthrough
 
 (frame.c) av_frame_new_side_data, av_frame_get_side_data
+
+
+
+""" ffmpeg.c """
+decode_video
+  decode
+    avcodec_send_packet
+      av_bsf_send_packet
+      (conditional) decode_receive_frame_interval
+        OR codec->receive_frame
+        OR decode_simple_receive_frame
+          decode_simple_internal
+            ff_decode_get_packet
+            OR ff_thread_decode_frame
+            OR codec->decode

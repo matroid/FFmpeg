@@ -603,7 +603,7 @@ typedef struct AVFrame {
      */
     AVBufferRef *private_ref;
 
-    double gts;
+    double gts_base;
 } AVFrame;
 
 #if FF_API_FRAME_GET_SET

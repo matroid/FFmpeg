@@ -1474,7 +1474,7 @@ typedef struct AVPacket {
     int64_t convergence_duration;
 #endif
 
-    double gts;
+    double gts_base;
 } AVPacket;
 #define AV_PKT_FLAG_KEY     0x0001 ///< The packet contains a keyframe
 #define AV_PKT_FLAG_CORRUPT 0x0002 ///< The packet content is corrupted
