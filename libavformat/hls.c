@@ -38,6 +38,7 @@
 #include "internal.h"
 #include "avio_internal.h"
 #include "id3v2.h"
+#include "libavutil/strftime_micro.h"
 
 #define INITIAL_BUFFER_SIZE 32768
 
@@ -75,6 +76,8 @@ struct segment {
     uint8_t iv[16];
     /* associated Media Initialization Section, treated as a segment */
     struct segment *init_section;
+    double program_date_time;
+    int64_t initial_dts;
 };
 
 struct rendition;
@@ -706,6 +709,7 @@ static int parse_playlist(HLSContext *c, const char *url,
     struct segment **prev_segments = NULL;
     int prev_n_segments = 0;
     int prev_start_seq_no = -1;
+    double program_date_time = -1;
 
     if (is_http && !in && c->http_persistent && c->playlist_pb) {
         in = c->playlist_pb;
@@ -843,6 +847,28 @@ static int parse_playlist(HLSContext *c, const char *url,
             ptr = strchr(ptr, '@');
             if (ptr)
                 seg_offset = strtoll(ptr+1, NULL, 10);
+        } else if (av_strstart(line, "#EXT-X-PROGRAM-DATE-TIME:", &ptr)) {
+            struct tm pdt;
+            int y,M,d,h,m;
+            double s;
+
+            // TODO: take timezone into consideration
+            if (sscanf(ptr, "%d-%d-%dT%d:%d:%lf", &y, &M, &d, &h, &m, &s) != 6) {
+                ret = AVERROR_INVALIDDATA;
+                goto fail;
+            }
+
+            pdt.tm_year = y - 1900;
+            pdt.tm_mon = M - 1;
+            pdt.tm_mday = d;
+            pdt.tm_hour = h;
+            pdt.tm_min = m;
+            pdt.tm_sec = 0;
+            pdt.tm_isdst = -1;
+
+            program_date_time = my_timegm(&pdt);
+            program_date_time += s;
+            // TODO: avoid rounding errors by tracking ms separately
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {
@@ -898,6 +924,12 @@ static int parse_playlist(HLSContext *c, const char *url,
                     goto fail;
                 }
 
+                seg->program_date_time = program_date_time;
+                if (program_date_time > 0) {
+                    program_date_time += (double) duration / AV_TIME_BASE;
+                }
+                seg->initial_dts = -1;
+                
                 dynarray_add(&pls->segments, &pls->n_segments, seg);
                 is_segment = 0;
 
@@ -947,8 +979,20 @@ fail:
     return ret;
 }
 
+static struct segment *closest_segment(struct playlist *pls) {
+    int n = pls->cur_seq_no - pls->start_seq_no;
+    if (n < 0)
+        return pls->segments[0];
+    if (n >= pls->n_segments)
+        return pls->segments[pls->n_segments - 1];
+    return pls->segments[pls->cur_seq_no - pls->start_seq_no];
+}
+
 static struct segment *current_segment(struct playlist *pls)
 {
+    int n = pls->cur_seq_no - pls->start_seq_no;
+    if (n >= pls->n_segments)
+        return NULL;
     return pls->segments[pls->cur_seq_no - pls->start_seq_no];
 }
 
@@ -2042,8 +2086,8 @@ static void fill_timing_for_id3_timestamped_stream(struct playlist *pls)
 
 static AVRational get_timebase(struct playlist *pls)
 {
-    if (pls->is_id3_timestamped)
-        return MPEG_TIME_BASE_Q;
+    //if (pls->is_id3_timestamped)
+    //    return MPEG_TIME_BASE_Q;
 
     return pls->ctx->streams[pls->pkt.stream_index]->time_base;
 }
@@ -2073,13 +2117,25 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
             while (1) {
                 int64_t ts_diff;
                 AVRational tb;
-                ret = av_read_frame(pls->ctx, &pls->pkt);
+                ret = av_read_frame(pls->ctx, &pls->pkt);                
                 if (ret < 0) {
                     if (!avio_feof(&pls->pb) && ret != AVERROR_EOF)
                         return ret;
                     reset_packet(&pls->pkt);
                     break;
                 } else {
+                    struct segment *seg = closest_segment(pls);
+                    if (seg->initial_dts < 0 && pls->pkt.dts != AV_NOPTS_VALUE) {
+                        seg->initial_dts = pls->pkt.dts;
+                    }
+ 
+                    if (pls->pkt.pts != AV_NOPTS_VALUE && seg->program_date_time > 0 && seg->initial_dts > 0)
+                    {
+                        pls->pkt.gts = seg->program_date_time + (pls->pkt.pts - seg->initial_dts) * av_q2d(get_timebase(pls));
+                    } else {
+                        pls->pkt.gts = -1;
+                    }
+
                     /* stream_index check prevents matching picture attachments etc. */
                     if (pls->is_id3_timestamped && pls->pkt.stream_index == 0) {
                         /* audio elementary streams are id3 timestamped */

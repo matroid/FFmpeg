@@ -32,6 +32,12 @@ Use both clock time and frame pts, both accurate to micro second level (some spe
 ffmpeg -i something -f image2 -frame_pts 1 -strftime 1 'frame-%%%%t-%s.%%06u.png'
 ```
 
+Using global timestamp functions exactly the same as frame pts:
+
+```
+ffmpeg -i something -f image2 -frame_pts 1 -strftime 1 -global_timestamp 1 'frame-%%%%t-%s.%%06u-%%%%g.png'
+```
+
 ## Segment Output
 
 Use integer as filename (already supported in regular FFmpeg):
@@ -68,6 +74,12 @@ Use both clock time and frame pts, both accurate to micro second level (some spe
 
 ```
 ffmpeg -i something -f segment -frame_pts 1 -strftime 1 'clip-%s.%%06u-%%%%t-%%%%l.mp4'
+```
+
+Using global timestamp functions exactly the same as frame pts:
+
+```
+ffmpeg -i something -f segment -frame_pts 1 -strftime 1 -global_timestamp 1 'clip-%s.%%06u-%%%%t-%%%%l-%%%%g.mp4'
 ```
 
 ## Credits

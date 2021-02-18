@@ -8,5 +8,6 @@
 #define _STRFTIME_MICRO_
 
 size_t strftime_micro(char *buf, size_t size, const char *format, const struct timeval *tv);
+time_t my_timegm(struct tm *tm);
 
 #endif

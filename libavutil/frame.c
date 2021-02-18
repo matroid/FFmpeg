@@ -163,6 +163,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     frame->color_range         = AVCOL_RANGE_UNSPECIFIED;
     frame->chroma_location     = AVCHROMA_LOC_UNSPECIFIED;
     frame->flags               = 0;
+    frame->gts                 = -1;
 }
 
 static void free_side_data(AVFrameSideData **ptr_sd)
@@ -373,6 +374,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     dst->colorspace             = src->colorspace;
     dst->color_range            = src->color_range;
     dst->chroma_location        = src->chroma_location;
+    dst->gts                    = src->gts;
 
     av_dict_copy(&dst->metadata, src->metadata, 0);
 
