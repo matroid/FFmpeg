@@ -2810,8 +2810,11 @@ void av_dump_format(AVFormatContext *ic,
  * @param flags AV_FRAME_FILENAME_FLAGS_*
  * @return 0 if OK, -1 on format error
  */
+int av_get_frame_filename3(char *buf, int buf_size,
+                          const char *path, int number, int flags, int64_t ts, double duration, double global_timestamp);
+
 int av_get_frame_filename2(char *buf, int buf_size,
-                          const char *path, int number, int flags);
+                          const char *path, int number, int flags, int64_t ts);
 
 int av_get_frame_filename(char *buf, int buf_size,
                           const char *path, int number);
